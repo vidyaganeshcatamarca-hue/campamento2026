@@ -47,7 +47,7 @@ export default function KioscoAuditoriaPage() {
     const cargarDatos = async () => {
         await Promise.all([
             cargarVentasHoy(),
-            cargarRanking(),
+            cargarVentasHoy(),
             cargarVentasPeriodo() // Agregado para cargar período inicial
         ]);
         setLoading(false);
@@ -94,20 +94,35 @@ export default function KioscoAuditoriaPage() {
         }
     };
 
-    const cargarRanking = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('vista_productos_mas_vendidos')
-                .select('*')
-                .limit(5);
-
-            if (error) throw error;
-            setRanking(data || []);
-
-        } catch (error) {
-            console.error('Error cargando ranking:', error);
+    // Calcular ranking basado en ventas del periodo (Client-side aggregation)
+    useEffect(() => {
+        if (ventasPeriodo.length === 0) {
+            setRanking([]);
+            return;
         }
-    };
+
+        const stats: Record<string, ProductoRanking> = {};
+
+        ventasPeriodo.forEach(v => {
+            if (!stats[v.producto]) {
+                stats[v.producto] = {
+                    producto: v.producto,
+                    total_cantidad: 0,
+                    total_monto: 0,
+                    num_transacciones: 0
+                };
+            }
+            stats[v.producto].total_cantidad += v.cantidad_vendida;
+            stats[v.producto].total_monto += v.total_ventas;
+            stats[v.producto].num_transacciones += 1;
+        });
+
+        const sorted = Object.values(stats)
+            .sort((a, b) => b.total_cantidad - a.total_cantidad)
+            .slice(0, 3); // Top 3
+
+        setRanking(sorted);
+    }, [ventasPeriodo]);
 
     const cerrarCaja = async () => {
         const mensaje = `
@@ -215,7 +230,7 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <BarChart3 className="w-5 h-5" />
-                                Top 5 Productos Más Vendidos
+                                Top 3 Productos Más Vendidos
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
