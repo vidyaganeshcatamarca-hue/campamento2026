@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Home, Calendar, LogOut, Users } from 'lucide-react';
+import { MapaParcelas } from '@/components/ui/MapaParcelas';
 
 interface ParcelaConEstadia {
     nombre_parcela: string;
@@ -518,57 +519,34 @@ export default function OcupacionPage() {
                 )}
 
                 {/* Mapa Camping */}
-                <Card>
-                    <CardHeader><CardTitle>Mapa de Parcelas</CardTitle></CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-3">
-                            {parcelasCamping.map(parcela => (
-                                <div
-                                    key={parcela.nombre_parcela}
-                                    className={`${getColorParcela(parcela.estado)} p-4 rounded-lg text-white text-center cursor-pointer hover:opacity-100 transition-all relative group shadow-sm`}
-                                    title={parcela.estadia_nombre || parcela.estado}
-                                >
-                                    <p className="font-bold text-sm">{parcela.nombre_parcela}</p>
+                <Card className="overflow-hidden">
+                    <CardHeader className="bg-gray-50/50 pb-4">
+                        <CardTitle className="flex justify-between items-center">
+                            <span>Mapa de Parcelas</span>
+                            <div className="flex gap-3 text-sm font-normal">
+                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-green-500 rounded-full"></div> Libre</span>
+                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500 rounded-full"></div> Ocupada</span>
+                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div> Reservada</span>
+                            </div>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0 sm:p-6">
+                        <MapaParcelas
+                            ocupadas={parcelas.filter(p => p.estado === 'ocupada').map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                            reservadas={parcelas.filter(p => p.estado === 'reservada').map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                            onSelect={(id) => {
+                                const parcela = parcelas.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
+                                if (!parcela) return;
 
-                                    {/* Overlay Actions */}
-                                    <div className="absolute inset-0 bg-black/60 rounded-lg flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity p-1 gap-2 z-10">
-
-                                        {parcela.estado === 'ocupada' && (
-                                            <button
-                                                className="bg-white text-black text-[10px] font-bold px-2 py-1 rounded hover:bg-gray-200 w-full"
-                                                onClick={(e) => { e.stopPropagation(); setParcelaSeleccionada(parcela); }}
-                                            >
-                                                Mudar
-                                            </button>
-                                        )}
-
-                                        {parcela.estado === 'libre' && (
-                                            <button
-                                                className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-1 rounded hover:bg-yellow-300 w-full"
-                                                onClick={(e) => { e.stopPropagation(); handleReservarParcela(parcela.nombre_parcela); }}
-                                            >
-                                                Reservar
-                                            </button>
-                                        )}
-
-                                        {parcela.estado === 'reservada' && (
-                                            <button
-                                                className="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-1 rounded hover:bg-green-200 w-full"
-                                                onClick={(e) => { e.stopPropagation(); handleLiberarReserva(parcela.nombre_parcela); }}
-                                            >
-                                                Liberar
-                                            </button>
-                                        )}
-
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex gap-4 mt-6 justify-center text-sm">
-                            <span className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded"></div> Libre</span>
-                            <span className="flex items-center gap-2"><div className="w-4 h-4 bg-red-500 rounded"></div> Ocupada</span>
-                            <span className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-500 rounded"></div> Reservada</span>
-                        </div>
+                                if (parcela.estado === 'ocupada') {
+                                    setParcelaSeleccionada(parcela);
+                                } else if (parcela.estado === 'reservada') {
+                                    handleLiberarReserva(parcela.nombre_parcela);
+                                } else {
+                                    handleReservarParcela(parcela.nombre_parcela);
+                                }
+                            }}
+                        />
                     </CardContent>
                 </Card>
             </div>

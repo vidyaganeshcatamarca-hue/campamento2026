@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase, Acampante, Estadia, Parcela } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
+import { MapaParcelas } from '@/components/ui/MapaParcelas';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Counter } from '@/components/ui/Counter';
@@ -403,39 +404,28 @@ export default function CheckInPage() {
                                 No hay parcelas disponibles en este momento
                             </p>
                         ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {parcelasDisponibles
-                                    .filter(p => showOcupadas ? true : p.estado === 'libre')
-                                    .map((parcela) => {
-                                        const isSelected = parcelasSeleccionadas.includes(parcela.id);
-                                        const isOcupada = parcela.estado === 'ocupada';
+                            <div className="space-y-4">
+                                <MapaParcelas
+                                    ocupadas={parcelasDisponibles
+                                        .filter(p => p.estado === 'ocupada')
+                                        .map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                                    reservadas={parcelasDisponibles
+                                        .filter(p => p.estado === 'reservada')
+                                        .map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                                    seleccionadas={parcelasSeleccionadas}
+                                    onSelect={(id) => {
+                                        // Buscar parcela por ID numérico en el nombre
+                                        const parcela = parcelasDisponibles.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
+                                        if (parcela) {
+                                            toggleParcela(parcela.id);
+                                        }
+                                    }}
+                                />
 
-                                        return (
-                                            <button
-                                                key={parcela.id}
-                                                onClick={() => toggleParcela(parcela.id)}
-                                                className={`p-3 rounded-lg border-2 transition-all text-center ${isSelected
-                                                    ? 'border-primary bg-primary text-white'
-                                                    : isOcupada
-                                                        ? 'border-red-500 bg-red-100 text-red-900 cursor-not-allowed opacity-80'
-                                                        : 'border-green-500 bg-green-50 text-green-900 hover:bg-green-100'
-                                                    }`}
-                                            >
-                                                <span className="font-semibold block">{parcela.nombre_parcela}</span>
-                                                {isOcupada && (parcela as ParcelaConInfo).responsable_nombre && (
-                                                    <div className="mt-2 space-y-1">
-                                                        <Badge variant="warning" className="text-xs flex items-center justify-center gap-1">
-                                                            <Users className="w-3 h-3" />
-                                                            {(parcela as ParcelaConInfo).cant_personas || 0}
-                                                        </Badge>
-                                                        <p className="text-xs text-gray-700 truncate">
-                                                            {(parcela as ParcelaConInfo).responsable_nombre}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
+                                {/* Leyenda adicional o lista textual opcional si se desea */}
+                                <div className="text-center text-sm text-muted">
+                                    <p>Selecciona las parcelas en el mapa</p>
+                                </div>
                             </div>
                         )}
                     </CardContent>

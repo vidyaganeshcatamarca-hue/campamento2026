@@ -62,7 +62,7 @@ export interface Pago {
 export interface Parcela {
     id: number;
     nombre_parcela: string;
-    estado?: 'libre' | 'ocupada' | 'mantenimiento';
+    estado?: 'libre' | 'ocupada' | 'mantenimiento' | 'reservada';
     estadia_id?: string; // DEPRECATED: Usar cantidad_integrantes
     cantidad_integrantes?: number; // NUEVO: Contador de personas en esta parcela
 }
