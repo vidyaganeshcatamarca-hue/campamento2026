@@ -307,7 +307,7 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                                     <tbody>
                                         {ventasPeriodo.map((venta, i) => (
                                             <tr key={i} className="border-b border-gray-100">
-                                                <td className="p-2">{format(new Date(venta.fecha), 'dd/MM/yyyy')}</td>
+                                                <td className="p-2">{format(new Date(venta.fecha + 'T12:00:00'), 'dd/MM/yyyy')}</td>
                                                 <td className="p-2">{venta.producto}</td>
                                                 <td className="p-2 text-right">{venta.cantidad_vendida}</td>
                                                 <td className="p-2 text-right font-semibold">{formatCurrency(venta.total_ventas)}</td>
