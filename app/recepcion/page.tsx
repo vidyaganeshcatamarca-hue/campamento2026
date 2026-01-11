@@ -59,7 +59,7 @@ export default function RecepcionPage() {
             setArribos(arribosCombinados);
         } catch (error) {
             console.error('Error al cargar arribos:', error);
-            alert('Error al cargar los datos. Por favor intente nuevamente.');
+            console.log('Error al cargar datos:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);

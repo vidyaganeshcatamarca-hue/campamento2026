@@ -46,6 +46,8 @@ export interface Estadia {
     tipo_vehiculo?: string;
     acumulado_noches_persona?: number;
     cant_vehiculos_total?: number;
+    parcela_asignada?: string | null; // NUEVO: Nombre de la parcela asignada (ej: "A1", "CAMA-1")
+    observaciones?: string; // Para auditoría y notas
 }
 
 export interface Pago {
@@ -60,7 +62,8 @@ export interface Parcela {
     id: number;
     nombre_parcela: string;
     estado?: 'libre' | 'ocupada' | 'mantenimiento';
-    estadia_id?: string;
+    estadia_id?: string; // DEPRECATED: Usar cantidad_integrantes
+    cantidad_integrantes?: number; // NUEVO: Contador de personas en esta parcela
 }
 
 export interface PrecioConfig {
@@ -86,21 +89,27 @@ export interface VisitaDiaria {
 export interface VistaEstadiaConTotales {
     id: string;
     celular_responsable: string;
-    fecha_ingreso?: string;
+    fecha_ingreso: string | null;
     fecha_egreso_programada: string;
-    cant_personas_total?: number;
-    cant_parcelas_total?: number;
-    cant_sillas_total?: number;
-    cant_mesas_total?: number;
-    tipo_vehiculo?: string;
-    descuento_arbitrario?: number;
-    acumulado_noches_persona?: number;
-    dias_parcela_total: number;
-    p_persona: number;
-    p_parcela: number;
-    p_silla: number;
-    p_mesa: number;
-    p_vehiculo: number;
-    monto_total_calculado: number;
-    saldo_pendiente: number;
+    cant_personas_total: number;
+    cant_parcelas_total: number;
+    cant_sillas_total: number;
+    cant_mesas_total: number;
+    estado_estadia: string;
+    descuento_arbitrario: number;
+    ingreso_confirmado: boolean;
+    tipo_vehiculo: string | null;
+    acumulado_noches_persona: number;
+    dias_parcela: number; // Días que la parcela estuvo ocupada
+    cant_camas: number;  // Nuevas camas de habitación
+    cant_parcelas_camping: number;  // Parcelas de camping (sin camas)
+    p_persona: number; // Precio unitario por persona/noche
+    p_parcela: number; // Precio unitario por carpa/día
+    p_cama: number;  // Nuevo precio de cama
+    p_silla: number; // Precio unitario por silla/día
+    p_mesa: number; // Precio unitario por mesa/día
+    p_vehiculo: number; // Precio unitario por vehículo/día (0 si ninguno)
+    monto_total_final: number; // Monto total calculado con descuento
+    saldo_pendiente: number; // Monto total - pagos realizados
+    parcela_asignada?: string | null; // Nombre de parcela/s asignada/s
 }

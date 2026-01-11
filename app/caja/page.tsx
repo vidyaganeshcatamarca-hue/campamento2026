@@ -1,0 +1,310 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Layout } from '@/components/ui/Layout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { DollarSign, TrendingUp, Users, Download } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+
+export default function CajaPage() {
+    const [loading, setLoading] = useState(true);
+    const [periodo, setPeriodo] = useState<'hoy' | 'semana' | 'mes' | 'custom'>('hoy');
+    const [fechaDesde, setFechaDesde] = useState('');
+    const [fechaHasta, setFechaHasta] = useState('');
+
+    const [totalCobrado, setTotalCobrado] = useState(0);
+    const [totalAdeudado, setTotalAdeudado] = useState(0);
+    const [pagosPorMetodo, setPagosPorMetodo] = useState<{ [key: string]: number }>({});
+    const [promedioEstadia, setPromedioEstadia] = useState(0);
+
+    // Estadísticas de kiosco
+    const [totalKiosco, setTotalKiosco] = useState(0);
+    const [ventasKiosco, setVentasKiosco] = useState<any[]>([]);
+
+    useEffect(() => {
+        fetchEstadisticas();
+    }, [periodo, fechaDesde, fechaHasta]);
+
+    const fetchEstadisticas = async () => {
+        setLoading(true);
+        try {
+            const { fechaInicio, fechaFin } = calcularRangoFechas();
+
+            // Total cobrado en el período
+            const { data: pagosData } = await supabase
+                .from('pagos')
+                .select('monto_abonado, metodo_pago')
+                .gte('fecha_pago', fechaInicio)
+                .lte('fecha_pago', fechaFin);
+
+            const total = pagosData?.reduce((sum, p) => sum + p.monto_abonado, 0) || 0;
+            setTotalCobrado(total);
+
+            // Pagos por método
+            const metodosMap: { [key: string]: number } = {};
+            pagosData?.forEach(p => {
+                metodosMap[p.metodo_pago] = (metodosMap[p.metodo_pago] || 0) + p.monto_abonado;
+            });
+            setPagosPorMetodo(metodosMap);
+
+            // Total adeudado (personas ingresadas con saldo pendiente)
+            const { data: estadiasData } = await supabase
+                .from('vista_estadias_con_totales')
+                .select('saldo_pendiente')
+                .eq('ingreso_confirmado', true)
+                .gt('saldo_pendiente', 0); // Solo deudas positivas
+
+            const deuda = estadiasData?.reduce((sum, e) => sum + e.saldo_pendiente, 0) || 0;
+            setTotalAdeudado(deuda);
+
+            // Promedio por estadía
+            if (pagosData && pagosData.length > 0) {
+                const estadiasUnicas = new Set(pagosData.map((p: any) => p.estadia_id)).size;
+                setPromedioEstadia(estadiasUnicas > 0 ? total / estadiasUnicas : 0);
+            }
+
+            // Ventas de kiosco
+            const { data: kioscoData } = await supabase
+                .from('vista_ventas_kiosco_diarias')
+                .select('*')
+                .gte('fecha', fechaInicio.split('T')[0])
+                .lte('fecha', fechaFin.split('T')[0]);
+
+            const totalK = kioscoData?.reduce((sum, v) => sum + v.total_ventas, 0) || 0;
+            setTotalKiosco(totalK);
+            setVentasKiosco(kioscoData || []);
+
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const calcularRangoFechas = () => {
+        const ahora = new Date();
+        let fechaInicio = new Date();
+
+        if (periodo === 'custom') {
+            if (fechaDesde && fechaHasta) {
+                return {
+                    fechaInicio: new Date(fechaDesde + 'T00:00:00').toISOString(),
+                    fechaFin: new Date(fechaHasta + 'T23:59:59').toISOString(),
+                };
+            }
+        }
+
+        if (periodo === 'hoy') {
+            fechaInicio.setHours(0, 0, 0, 0);
+        } else if (periodo === 'semana') {
+            fechaInicio.setDate(ahora.getDate() - 7);
+        } else if (periodo === 'mes') {
+            fechaInicio.setMonth(ahora.getMonth() - 1);
+        }
+
+        return {
+            fechaInicio: fechaInicio.toISOString(),
+            fechaFin: ahora.toISOString(),
+        };
+    };
+
+    if (loading) {
+        return (
+            <Layout>
+                <div className="text-center py-12">
+                    <p className="text-muted">Cargando...</p>
+                </div>
+            </Layout>
+        );
+    }
+
+    return (
+        <Layout>
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-primary">
+                        Cierre de Caja
+                    </h1>
+                    <p className="text-muted mt-1">
+                        Estadísticas financieras y reportes
+                    </p>
+                </div>
+
+                {/* Selector de Período */}
+                <div className="space-y-3">
+                    <div className="flex gap-2">
+                        <Button
+                            variant={periodo === 'hoy' ? 'primary' : 'outline'}
+                            onClick={() => setPeriodo('hoy')}
+                        >
+                            Hoy
+                        </Button>
+                        <Button
+                            variant={periodo === 'semana' ? 'primary' : 'outline'}
+                            onClick={() => setPeriodo('semana')}
+                        >
+                            Esta Semana
+                        </Button>
+                        <Button
+                            variant={periodo === 'mes' ? 'primary' : 'outline'}
+                            onClick={() => setPeriodo('mes')}
+                        >
+                            Este Mes
+                        </Button>
+                        <Button
+                            variant={periodo === 'custom' ? 'primary' : 'outline'}
+                            onClick={() => setPeriodo('custom')}
+                        >
+                            Personalizado
+                        </Button>
+                    </div>
+
+                    {periodo === 'custom' && (
+                        <div className="flex gap-3 items-end">
+                            <Input
+                                label="Desde"
+                                type="date"
+                                value={fechaDesde}
+                                onChange={(e) => setFechaDesde(e.target.value)}
+                            />
+                            <Input
+                                label="Hasta"
+                                type="date"
+                                value={fechaHasta}
+                                onChange={(e) => setFechaHasta(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* KPIs Financieros */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                        <CardContent className="pt-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-green-100 rounded-lg">
+                                    <DollarSign className="w-6 h-6 text-green-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted">Total Cobrado</p>
+                                    <p className="text-2xl font-bold text-green-600">
+                                        {formatCurrency(totalCobrado)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="pt-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-danger/10 rounded-lg">
+                                    <DollarSign className="w-6 h-6 text-danger" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted">Total Adeudado</p>
+                                    <p className="text-2xl font-bold text-danger">
+                                        {formatCurrency(totalAdeudado)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="pt-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-accent/10 rounded-lg">
+                                    <TrendingUp className="w-6 h-6 text-accent" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted">Promedio/Estadía</p>
+                                    <p className="text-2xl font-bold text-accent">
+                                        {formatCurrency(promedioEstadia)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Ingresos por Método */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Ingresos por Método de Pago</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {Object.keys(pagosPorMetodo).length === 0 ? (
+                            <p className="text-muted text-center py-4">No hay pagos en este período</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {Object.entries(pagosPorMetodo).map(([metodo, monto]) => (
+                                    <div key={metodo} className="flex items-center justify-between p-3 bg-secondary/10 rounded">
+                                        <span className="font-medium">{metodo}</span>
+                                        <span className="text-lg font-bold text-primary">
+                                            {formatCurrency(monto)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Facturación Kiosco */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Facturación Kios co</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-4 bg-accent/10 rounded-lg">
+                                <span className="font-semibold">Total Kiosco:</span>
+                                <span className="text-2xl font-bold text-accent">
+                                    {formatCurrency(totalKiosco)}
+                                </span>
+                            </div>
+
+                            {ventasKiosco.length > 0 && (
+                                <div>
+                                    <p className="text-sm text-muted mb-2">Desglose por producto:</p>
+                                    <div className="space-y-2">
+                                        {ventasKiosco.map((venta, i) => (
+                                            <div key={i} className="flex justify-between text-sm py-1 border-b border-gray-100">
+                                                <span>{venta.producto} ({venta.cantidad_vendida})</span>
+                                                <span className="font-semibold">{formatCurrency(venta.total_ventas)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Total General */}
+                <Card className="bg-primary/5 border-2 border-primary">
+                    <CardContent className="pt-6">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <p className="text-sm text-muted">Facturación Total (Camping + Kiosco)</p>
+                                <p className="text-3xl font-bold text-primary mt-1">
+                                    {formatCurrency(totalCobrado + totalKiosco)}
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Botón Exportar */}
+                <Button variant="outline" className="w-full md:w-auto">
+                    <Download className="w-5 h-5 mr-2" />
+                    Exportar Reporte (Próximamente)
+                </Button>
+            </div>
+        </Layout>
+    );
+}

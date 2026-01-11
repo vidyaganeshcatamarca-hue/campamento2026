@@ -1,0 +1,110 @@
+// Funciones auxiliares para reasignación de acampantes
+// Copiar y pegar estas funciones en liquidacion/[estadia_id]/page.tsx
+
+const handleCambiarACompanero = (acampante: any) => {
+    setAcompanteToReassign(acampante);
+    setShowReassignModal(true);
+};
+
+const handleReasignarAcampante = async (nuevoResponsableCelular: string) => {
+    if (!acompanteToReassign) return;
+
+    try {
+        const estadiaDestino = estadiasActivas.find(e => e.celular_responsable === nuevoResponsableCelular);
+        if (!estadiaDestino) {
+            alert('No se encontró la estadía destino');
+            return;
+        }
+
+        // Actualizar el acampante
+        await supabase
+            .from('acampantes')
+            .update({
+                es_responsable_pago: false,
+                celular_responsable: nuevoResponsableCelular,
+                estadia_id: estadiaDestino.id
+            })
+            .eq('id', acompanteToReassign.id);
+
+        // Recargar datos
+        await fetchData();
+        setShowReassignModal(false);
+        setAcompanteToReassign(null);
+        alert('Acampante reasignado exitosamente');
+
+    } catch (error) {
+        console.error('Error reasignando:', error);
+        alert('Error al reasignar. Intente nuevamente.');
+    }
+};
+
+// ============================================
+// UI COMPONENTS - Agregar en el JSX después de la sección de costos
+// ============================================
+
+{/* Lista de Acampantes - Para reasignar responsables */}
+{acampantes.length > 1 && (
+    <Card>
+        <CardHeader>
+            <CardTitle>Acampantes de esta Estadía</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="space-y-3">
+                {acampantes.map(acampante => (
+                    <div key={acampante.id} className="flex items-center justify-between p-3 bg-secondary/5 rounded-lg">
+                        <div className="flex-1">
+                            <p className="font-medium">{acampante.nombre_completo}</p>
+                            <p className="text-sm text-muted">{acampante.celular}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {acampante.es_responsable_pago ? (
+                                <>
+                                    <Badge variant="success">Responsable</Badge>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleCambiarACompanero(acampante)}
+                                    >
+                                        Cambiar a Acompañante
+                                    </Button>
+                                </>
+                            ) : (
+                                <Badge variant="secondary">Acompañante</Badge>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </CardContent>
+    </Card>
+)}
+
+{/* Modal de Reasignación */}
+{showReassignModal && acompanteToReassign && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowReassignModal(false)}>
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Reasignar a otro Responsable</h3>
+            <p className="text-sm text-muted mb-4">
+                Selecciona la estadía (responsable) a la que pertenece <strong>{acompanteToReassign.nombre_completo}</strong>:
+            </p>
+            <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
+                {estadiasActivas.map(est => (
+                    <button
+                        key={est.id}
+                        onClick={() => handleReasignarAcampante(est.celular_responsable)}
+                        className="w-full text-left p-3 border rounded hover:bg-secondary/10 transition"
+                    >
+                        <p className="font-medium">{est.celular_responsable}</p>
+                    </button>
+                ))}
+            </div>
+            <Button
+                variant="outline"
+                onClick={() => setShowReassignModal(false)}
+                className="w-full"
+            >
+                Cancelar
+            </Button>
+        </div>
+    </div>
+)}

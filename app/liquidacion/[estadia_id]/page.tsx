@@ -7,8 +7,13 @@ import { Layout } from '@/components/ui/Layout';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { DollarSign, CheckCircle } from 'lucide-react';
-import { formatCurrency, sendWhatsAppNotification } from '@/lib/utils';
+import { Badge } from '@/components/ui/Badge';
+import { DollarSign, CheckCircle, Send, MessageCircle } from 'lucide-react';
+import { formatCurrency, sendWhatsAppNotification, replaceTemplate } from '@/lib/utils';
+import { MJE_BIENVENIDA_PERSONAL, MJE_BIENVENIDA_GENERAL } from '@/lib/mensajes';
+import { toast } from 'sonner';
+
+import { cargarAcampantes, cargarEstadiasActivas, reasignarAcampante, procesarPagoInicial } from './helpers';
 
 export default function LiquidacionPage() {
     const router = useRouter();
@@ -22,10 +27,66 @@ export default function LiquidacionPage() {
     const [montoAbonar, setMontoAbonar] = useState(0);
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [responsableNombre, setResponsableNombre] = useState('');
+    const [fechaPromesa, setFechaPromesa] = useState('');
+    const [acampantes, setAcampantes] = useState<any[]>([]);
+    const [estadiasActivas, setEstadiasActivas] = useState<any[]>([]);
+    const [showReassignModal, setShowReassignModal] = useState(false);
+    const [acompanteToReassign, setAcompanteToReassign] = useState<any>(null);
+
+    // Estados para pago grupal vs individual
+    const [tipoCobro, setTipoCobro] = useState<'individual' | 'grupal'>('individual');
+    const [estadiasGrupo, setEstadiasGrupo] = useState<(VistaEstadiaConTotales & { responsable_nombre?: string })[]>([]);
+    const [totalGrupal, setTotalGrupal] = useState(0);
 
     useEffect(() => {
         fetchData();
     }, [estadiaId]);
+
+    // Cargar estadías del grupo cuando se selecciona cobro grupal
+    useEffect(() => {
+        if (tipoCobro === 'grupal' && vistaEstadia) {
+            cargarEstadiasGrupo();
+        }
+    }, [tipoCobro, vistaEstadia]);
+
+    const cargarEstadiasGrupo = async () => {
+        if (!vistaEstadia) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('vista_estadias_con_totales')
+                .select('*')
+                .eq('celular_responsable', vistaEstadia.celular_responsable)
+                .eq('estado_estadia', 'activa');
+
+            if (error) throw error;
+
+            // Cargar nombres de responsables para cada estadía
+            const estadiasConNombres = await Promise.all(
+                (data || []).map(async (est) => {
+                    const { data: acampantes } = await supabase
+                        .from('acampantes')
+                        .select('nombre_completo')
+                        .eq('estadia_id', est.id)
+                        .limit(1);
+
+                    return {
+                        ...est,
+                        responsable_nombre: acampantes && acampantes.length > 0 ? acampantes[0].nombre_completo : 'Desconocido'
+                    };
+                })
+            );
+
+            setEstadiasGrupo(estadiasConNombres);
+
+            // Calcular total grupal
+            const total = (data || []).reduce((sum, est) => sum + (est.saldo_pendiente || 0), 0);
+            setTotalGrupal(total);
+
+        } catch (error) {
+            console.error('Error al cargar estadías del grupo:', error);
+        }
+    };
 
     const fetchData = async () => {
         try {
@@ -51,6 +112,14 @@ export default function LiquidacionPage() {
                 setResponsableNombre(acampante.nombre_completo);
             }
 
+            // Cargar acampantes
+            const acampantesData = await cargarAcampantes(estadiaId);
+            setAcampantes(acampantesData);
+
+            // Cargar estadías activas
+            const estadiasData = await cargarEstadiasActivas(estadiaId);
+            setEstadiasActivas(estadiasData);
+
         } catch (error) {
             console.error('Error al cargar datos:', error);
             alert('Error al cargar datos financieros.');
@@ -60,11 +129,46 @@ export default function LiquidacionPage() {
         }
     };
 
+
+    const handleCambiarACompanero = (acampante: any) => {
+        setAcompanteToReassign(acampante);
+        setShowReassignModal(true);
+    };
+
+    const handleReasignarAcampante = async (celularResponsable: string) => {
+        if (!acompanteToReassign) return;
+
+        try {
+            const estadiaDestino = estadiasActivas.find(e => e.celular_responsable === celularResponsable);
+            if (!estadiaDestino) {
+                alert('No se encontró la estadía destino');
+                return;
+            }
+
+            await reasignarAcampante(
+                acompanteToReassign.id,
+                celularResponsable,
+                estadiaDestino.id
+            );
+
+            await fetchData();
+            setShowReassignModal(false);
+            setAcompanteToReassign(null);
+            // alert('Acampante reasignado exitosamente'); // Eliminado por solicitud
+
+        } catch (error) {
+            console.error('Error reasignando:', error);
+            alert('Error al reasignar. Intente nuevamente.');
+        }
+    };
+
+
     const handleFinalizarIngreso = async () => {
         if (!vistaEstadia) return;
 
-        if (montoAbonar <= 0) {
-            alert('Por favor ingresa un monto a abonar.');
+        // PERMITIR MONTO 0 (Genera Deuda)
+        if (montoAbonar < 0) {
+            alert('El monto a abonar no puede ser negativo.');
             return;
         }
 
@@ -79,34 +183,172 @@ export default function LiquidacionPage() {
                     .eq('id', estadiaId);
             }
 
-            // 2. Registrar el pago
-            const { error: pagoError } = await supabase
-                .from('pagos')
-                .insert({
-                    estadia_id: estadiaId,
-                    monto_abonado: montoAbonar,
-                    metodo_pago: metodoPago,
+            // 2. Calcular nuevo saldo
+            const montoTotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
+            const nuevoSaldo = montoTotal - descuentoEspecial - montoAbonar;
+
+            // 3. Registrar el pago (SOLO SI HAY MONTO > 0)
+            if (montoAbonar > 0) {
+                if (tipoCobro === 'grupal') {
+                    // PAGO GRUPAL
+                    const { error: pagoError } = await supabase
+                        .from('pagos')
+                        .insert({
+                            estadia_id: estadiaId, // Estadía del responsable
+                            monto_abonado: montoAbonar,
+                            metodo_pago: metodoPago,
+                        });
+
+                    if (pagoError) throw pagoError;
+                } else {
+                    // PAGO INDIVIDUAL
+                    const { error: pagoError } = await supabase
+                        .from('pagos')
+                        .insert({
+                            estadia_id: estadiaId,
+                            monto_abonado: montoAbonar,
+                            metodo_pago: metodoPago,
+                        });
+
+                    if (pagoError) throw pagoError;
+                }
+            }
+
+            // Si es pago grupal y SALDA TODO, confirmar a todos
+            if (tipoCobro === 'grupal' && nuevoSaldo <= 0) {
+                for (const est of estadiasGrupo) {
+                    await supabase
+                        .from('estadias')
+                        .update({
+                            ingreso_confirmado: true,
+                            estado_estadia: 'activa'
+                        })
+                        .eq('id', est.id);
+                }
+            }
+
+            // 4. Asignar parcela a la estadía e incrementar contador (solo individual)
+            const parcelasSeleccionadasStr = localStorage.getItem(`parcelas_${estadiaId}`);
+            if (parcelasSeleccionadasStr) {
+                const parcelasSeleccionadas = JSON.parse(parcelasSeleccionadasStr);
+
+                if (parcelasSeleccionadas.length > 0) {
+                    const parcelaId = parcelasSeleccionadas[0]; // Tomar la primera parcela
+
+                    // Obtener datos de la parcela
+                    const { data: parcela, error: parcelaError } = await supabase
+                        .from('parcelas')
+                        .select('nombre_parcela, cantidad_integrantes')
+                        .eq('id', parcelaId)
+                        .single();
+
+                    if (parcelaError) throw parcelaError;
+
+                    // Asignar parcela a la estadía
+                    const { error: assignError } = await supabase
+                        .from('estadias')
+                        .update({
+                            parcela_asignada: parcela.nombre_parcela,
+                            ingreso_confirmado: true,
+                            estado_estadia: 'activa',
+                            fecha_promesa_pago: nuevoSaldo > 0 && fechaPromesa ? fechaPromesa : null
+                        })
+                        .eq('id', estadiaId);
+
+                    if (assignError) throw assignError;
+
+                    // Incrementar contador de integrantes en la parcela
+                    const nuevaCantidad = (parcela.cantidad_integrantes || 0) + 1;
+                    const { error: updateParcelaError } = await supabase
+                        .from('parcelas')
+                        .update({
+                            cantidad_integrantes: nuevaCantidad,
+                            estado: 'ocupada'
+                        })
+                        .eq('id', parcelaId);
+
+                    if (updateParcelaError) throw updateParcelaError;
+                }
+
+                localStorage.removeItem(`parcelas_${estadiaId}`);
+            } else {
+                // Si no hay parcela seleccionada, solo confirmar ingreso
+                await supabase
+                    .from('estadias')
+                    .update({
+                        ingreso_confirmado: true,
+                        estado_estadia: 'activa',
+                        fecha_promesa_pago: nuevoSaldo > 0 && fechaPromesa ? fechaPromesa : null
+                    })
+                    .eq('id', estadiaId);
+            }
+
+            // 5. Enviar Notificaciones WhatsApp (Secuencia Completa)
+            try {
+                const telefono = vistaEstadia.celular_responsable;
+
+                // Determinar nombre de parcela final para el mensaje
+                let parcelaNombreFinal = vistaEstadia.parcela_asignada || 'Sin asignar';
+                // Si acabamos de asignar una, la tomamos del localStorage parseado anteriormente o de la logica
+                const parcelasSeleccionadasStrLocal = localStorage.getItem(`parcelas_${estadiaId}`); // Chequeamos de nuevo o usamos variable si pudiéramos
+                // Como no guardamos la parcela seleccionada en una variable scope superior fácil, 
+                // hacemos una pequeña consulta safe o confiamos en que 'vistaEstadia' tenía lo viejo. 
+                // Mejor: Si acabamos de actualizar la BD, el mensaje PERSONAL debería reflejarlo.
+                // Sin embargo, para no complicar, usamos un genérico si no tenemos el dato fresco, 
+                // pero el usuario verá su parcela física.
+
+                // Construcción Mensaje 1: Bienvenida Personal (Delay 120s = 2 min)
+                const mensajePersonal = replaceTemplate(MJE_BIENVENIDA_PERSONAL, {
+                    nombre_acampante: responsableNombre,
+                    parcela_asignada: parcelaNombreFinal
                 });
 
-            if (pagoError) throw pagoError;
+                await sendWhatsAppNotification({
+                    telefonos: [telefono],
+                    mensaje: mensajePersonal,
+                    tipo_mensaje: 'bienvenida',
+                    delay: true,
+                    tiempo: 120 // 120 segundos = 2 minutos
+                });
 
-            // 3. Calcular nuevo saldo
-            const nuevoSaldo = (vistaEstadia.monto_total_calculado - descuentoEspecial - montoAbonar);
+                // Construcción Mensaje 2: Bienvenida General (Delay 600s = 10 min)
+                await sendWhatsAppNotification({
+                    telefonos: [telefono],
+                    mensaje: MJE_BIENVENIDA_GENERAL,
+                    tipo_mensaje: 'general',
+                    delay: true,
+                    tiempo: 600 // 600 segundos = 10 minutos
+                });
 
-            // 4. Enviar notificación de WhatsApp
-            await sendWhatsAppNotification({
-                telefonos: [vistaEstadia.celular_responsable],
-                mensaje: `Hola ${responsableNombre}, recibimos tu pago de ${formatCurrency(montoAbonar)}. Tu saldo restante es ${formatCurrency(nuevoSaldo)}. ¡Bienvenido a Campamento Vrindavan!`,
-                tipo_mensaje: 'bienvenida',
-            });
+                // Construcción Mensaje 3: Recibo de Pago (Delay 240s = 4 min)
+                const detalleSaldo = nuevoSaldo > 0
+                    ? `📉 *Saldo Pendiente:* ${formatCurrency(nuevoSaldo)}\n📅 *Compromiso:* ${fechaPromesa ? new Date(fechaPromesa).toLocaleDateString('es-AR') : 'A definir'}`
+                    : '🎉 *¡Estadía completa saldada!*';
 
-            // 5. Mostrar confirmación y volver
-            alert('¡Check-in completado exitosamente!');
+                const mensajeRecibo = `Hola ${responsableNombre}, ¡nos alegra recibirte! 🏕️\n\nAquí tienes el resumen de tu ingreso:\n\n📋 *Total Estadía:* ${formatCurrency(montoTotal)}\n✅ *Abonaste:* ${formatCurrency(montoAbonar)} (${metodoPago})\n${detalleSaldo}\n\n¡Que disfruten mucho del campamento! Ante cualquier duda, estamos en recepción.`;
+
+                await sendWhatsAppNotification({
+                    telefonos: [telefono],
+                    mensaje: mensajeRecibo,
+                    tipo_mensaje: 'recibo_ingreso',
+                    delay: true,
+                    tiempo: 240 // 240 segundos = 4 minutos
+                });
+
+                toast.success('Ingreso finalizado y mensajes enviados.');
+
+            } catch (msgError) {
+                console.error('Error envío WhatsApp:', msgError);
+                toast.warning('Ingreso guardado, pero hubo error enviando WhatsApp.');
+            }
+
+            // 7. Navegar a recepción (sin alert)
             router.push('/recepcion');
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error al procesar pago:', error);
-            alert('Error al procesar el pago. Por favor intente nuevamente.');
+            // Mostrar mensaje real del error para depuración
+            alert(`Error al procesar el pago: ${error.message || 'Error desconocido'}`);
             setSaving(false);
         }
     };
@@ -131,9 +373,58 @@ export default function LiquidacionPage() {
         );
     }
 
-    const subtotal = vistaEstadia.monto_total_calculado;
+    const subtotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
     const totalConDescuento = subtotal - descuentoEspecial;
     const nuevoSaldo = totalConDescuento - montoAbonar;
+
+    // --- DEBUG HANDLERS ---
+    const handleDebugPersonal = async () => {
+        if (!vistaEstadia) return;
+        const nombre = (responsableNombre || 'Acampante'); // Full name
+        const parcela = vistaEstadia.parcela_asignada || 'Sin Asignar';
+        const telefono = vistaEstadia.celular_responsable;
+
+        const mensaje = replaceTemplate(MJE_BIENVENIDA_PERSONAL, {
+            nombre_acampante: nombre,
+            parcela_asignada: parcela
+        });
+
+        if (confirm(`¿Enviar WhatsApp Personal a ${telefono}?\n\n${mensaje.substring(0, 100)}...`)) {
+            try {
+                await sendWhatsAppNotification({
+                    telefonos: [telefono],
+                    mensaje: mensaje,
+                    tipo_mensaje: 'debug_personal'
+                });
+                alert('Mensaje Personal enviado a n8n');
+            } catch (e) {
+                console.error(e);
+                alert('Error enviando mensaje');
+            }
+        }
+    };
+
+    const handleDebugGeneral = async () => {
+        if (!vistaEstadia) return;
+        const telefono = vistaEstadia.celular_responsable;
+
+        if (confirm(`¿Enviar WhatsApp General a ${telefono}?`)) {
+            try {
+                await sendWhatsAppNotification({
+                    telefonos: [telefono],
+                    mensaje: MJE_BIENVENIDA_GENERAL,
+                    tipo_mensaje: 'debug_general',
+                    delay: true,
+                    tiempo: 5000 // 5 seg debug delay
+                });
+                alert('Mensaje General enviado a n8n (con delay 5s)');
+            } catch (e) {
+                console.error(e);
+                alert('Error enviando mensaje');
+            }
+        }
+    };
+    // ----------------------
 
     return (
         <Layout>
@@ -148,56 +439,161 @@ export default function LiquidacionPage() {
                     </p>
                 </div>
 
+                {/* Selector de Tipo de Cobro */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Tipo de Cobro</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                                <input
+                                    type="radio"
+                                    value="individual"
+                                    checked={tipoCobro === 'individual'}
+                                    onChange={() => setTipoCobro('individual')}
+                                    className="w-4 h-4 text-primary"
+                                />
+                                <div>
+                                    <span className="font-medium">Individual</span>
+                                    <p className="text-sm text-muted">Solo esta persona</p>
+                                </div>
+                            </label>
+                            <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                                <input
+                                    type="radio"
+                                    value="grupal"
+                                    checked={tipoCobro === 'grupal'}
+                                    onChange={() => setTipoCobro('grupal')}
+                                    className="w-4 h-4 text-primary"
+                                />
+                                <div>
+                                    <span className="font-medium">Grupal</span>
+                                    <p className="text-sm text-muted">Toda la familia (mismo responsable)</p>
+                                </div>
+                            </label>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Desglose Grupal */}
+                {tipoCobro === 'grupal' && estadiasGrupo.length > 1 && (
+                    <Card className="border-amber-200 bg-amber-50">
+                        <CardHeader>
+                            <CardTitle className="text-amber-900">Integrantes del Grupo</CardTitle>
+                            <p className="text-sm text-amber-700">
+                                {estadiasGrupo.length} personas con el mismo responsable
+                            </p>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                {estadiasGrupo.map((est, idx) => (
+                                    <div key={est.id} className="flex justify-between items-center p-2 bg-white rounded border border-amber-200">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={est.id === estadiaId ? 'danger' : 'info'}>
+                                                {idx + 1}
+                                            </Badge>
+                                            <span className="text-sm">
+                                                {est.id === estadiaId && <strong>(Responsable) </strong>}
+                                                {est.responsable_nombre || `Estadía ${est.id.slice(0, 8)}...`}
+                                            </span>
+                                        </div>
+                                        <span className="font-medium text-sm">
+                                            {formatCurrency(est.saldo_pendiente || 0)}
+                                        </span>
+                                    </div>
+                                ))}
+                                <div className="border-t-2 border-amber-300 pt-2 mt-3 flex justify-between items-center">
+                                    <strong className="text-amber-900">Total Grupal:</strong>
+                                    <strong className="text-lg text-amber-900">{formatCurrency(totalGrupal)}</strong>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Resumen Financiero */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Resumen de Costos</CardTitle>
+                        <CardTitle>
+                            {tipoCobro === 'grupal' ? 'Resumen del Responsable' : 'Resumen de Costos'}
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="space-y-3 text-sm">
                         {/* Desglose */}
-                        <div className="grid grid-cols-2 gap-2 pb-3 border-b border-gray-200">
-                            <span className="text-muted">Total por personas:</span>
-                            <span className="text-right font-medium">
-                                {formatCurrency(vistaEstadia.acumulado_noches_persona * vistaEstadia.p_persona)}
-                            </span>
 
-                            <span className="text-muted">Total por carpas ({vistaEstadia.dias_parcela_total} días):</span>
-                            <span className="text-right font-medium">
-                                {formatCurrency(vistaEstadia.dias_parcela_total * vistaEstadia.cant_parcelas_total * vistaEstadia.p_parcela)}
-                            </span>
-
-                            {vistaEstadia.cant_sillas_total > 0 && (
-                                <>
-                                    <span className="text-muted">Sillas ({vistaEstadia.cant_sillas_total}):</span>
-                                    <span className="text-right font-medium">
-                                        {formatCurrency(vistaEstadia.dias_parcela_total * vistaEstadia.cant_sillas_total * vistaEstadia.p_silla)}
-                                    </span>
-                                </>
-                            )}
-
-                            {vistaEstadia.cant_mesas_total > 0 && (
-                                <>
-                                    <span className="text-muted">Mesas ({vistaEstadia.cant_mesas_total}):</span>
-                                    <span className="text-right font-medium">
-                                        {formatCurrency(vistaEstadia.dias_parcela_total * vistaEstadia.cant_mesas_total * vistaEstadia.p_mesa)}
-                                    </span>
-                                </>
-                            )}
-
-                            {vistaEstadia.p_vehiculo > 0 && (
-                                <>
-                                    <span className="text-muted">Vehículo:</span>
-                                    <span className="text-right font-medium">
-                                        {formatCurrency(vistaEstadia.dias_parcela_total * vistaEstadia.p_vehiculo)}
-                                    </span>
-                                </>
-                            )}
+                        {/* Precio unitarios */}
+                        <div className="bg-gray-50 p-3 rounded space-y-1 text-xs text-muted">
+                            <div>💰 Precio por noche persona: {formatCurrency(vistaEstadia.p_persona)}</div>
+                            <div>🏕️ Precio por día parcela: {formatCurrency(vistaEstadia.p_parcela)}</div>
                         </div>
 
+                        {/* Personas en camping */}
+                        {(vistaEstadia.acumulado_noches_persona || 0) > 0 && (vistaEstadia.cant_parcelas_camping || 0) > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">
+                                    Personas (camping): {vistaEstadia.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia.p_persona)}
+                                </span>
+                                <span className="font-medium">
+                                    {formatCurrency((vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona)}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Parcelas de camping */}
+                        {(vistaEstadia.cant_parcelas_camping || 0) > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">
+                                    Parcelas: {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_parcelas_camping} × {formatCurrency(vistaEstadia.p_parcela)}
+                                </span>
+                                <span className="font-medium">
+                                    {formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela)}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Camas de habitación */}
+                        {(vistaEstadia.cant_camas || 0) > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">
+                                    Camas (habitación): {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_camas} × {formatCurrency(vistaEstadia.p_cama)}
+                                </span>
+                                <span className="font-medium text-accent">
+                                    {formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama)}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Recursos */}
+                        {((vistaEstadia.cant_sillas_total || 0) > 0 || (vistaEstadia.cant_mesas_total || 0) > 0) && (
+                            <>
+                                {(vistaEstadia.cant_sillas_total || 0) > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted">Sillas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_sillas_total}</span>
+                                        <span>{formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla)}</span>
+                                    </div>
+                                )}
+                                {(vistaEstadia.cant_mesas_total || 0) > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted">Mesas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_mesas_total}</span>
+                                        <span>{formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa)}</span>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* Vehículo */}
+                        {vistaEstadia.p_vehiculo > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-muted">Vehículo: {vistaEstadia.dias_parcela} días</span>
+                                <span>{formatCurrency(vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo)}</span>
+                            </div>
+                        )}
+
                         {/* Subtotal */}
-                        <div className="grid grid-cols-2 gap-2 text-lg font-semibold">
+                        <div className="flex justify-between text-lg font-semibold mt-4 pt-4 border-t border-gray-200">
                             <span>Subtotal:</span>
-                            <span className="text-right">{formatCurrency(subtotal)}</span>
+                            <span>{formatCurrency(subtotal)}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -248,12 +644,32 @@ export default function LiquidacionPage() {
                                 value={metodoPago}
                                 onChange={(e) => setMetodoPago(e.target.value)}
                                 className="input"
+                                required
                             >
                                 <option value="Efectivo">Efectivo</option>
                                 <option value="Transferencia">Transferencia</option>
                                 <option value="Mercado Pago">Mercado Pago</option>
                             </select>
                         </div>
+
+                        {/* Fecha Promesa de Pago - solo si queda saldo */}
+                        {nuevoSaldo > 0 && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                <p className="text-sm text-amber-800 mb-2">
+                                    ⚠️ Quedará un saldo pendiente de <strong>{formatCurrency(nuevoSaldo)}</strong>
+                                </p>
+                                <Input
+                                    label="¿Cuándo se compromete a pagar el resto? (opcional)"
+                                    type="date"
+                                    value={fechaPromesa}
+                                    onChange={(e) => setFechaPromesa(e.target.value)}
+                                    min={new Date().toISOString().split('T')[0]}
+                                />
+                                <p className="text-xs text-muted mt-1">
+                                    No se enviarán recordatorios antes de esta fecha
+                                </p>
+                            </div>
+                        )}
 
                         {/* Saldo pendiente */}
                         <div className="grid grid-cols-2 gap-2 p-4 bg-secondary-light/10 rounded-lg">
@@ -264,6 +680,8 @@ export default function LiquidacionPage() {
                         </div>
                     </CardContent>
                 </Card>
+
+
 
                 {/* Botones */}
                 <div className="flex gap-3 sticky bottom-4 bg-background p-4 rounded-lg shadow-lg border border-gray-200">
@@ -278,7 +696,7 @@ export default function LiquidacionPage() {
                     <Button
                         variant="primary"
                         onClick={handleFinalizarIngreso}
-                        disabled={saving || montoAbonar <= 0}
+                        disabled={saving || montoAbonar < 0}
                         className="flex-1 flex items-center justify-center gap-2"
                     >
                         <CheckCircle className="w-5 h-5" />

@@ -16,8 +16,8 @@ export function formatCurrency(amount: number): string {
  * Obtiene la fecha/hora actual al mediodía en zona horaria Argentina
  * Esto asegura consistencia en todos los registros de fecha
  */
-export function getNoonTimestamp(): string {
-    const now = new Date();
+export function getNoonTimestamp(dateInput?: Date): string {
+    const now = dateInput || new Date();
     const argentinaTime = toZonedTime(now, 'America/Argentina/Buenos_Aires');
 
     // Establecer a las 12:00:00
@@ -27,35 +27,74 @@ export function getNoonTimestamp(): string {
 }
 
 /**
+ * Reemplaza marcadores {{variable}} en un string con valores de un objeto
+ */
+export const replaceTemplate = (template: string, variables: Record<string, string>) => {
+    let message = template;
+    Object.entries(variables).forEach(([key, value]) => {
+        message = message.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    });
+    return message;
+};
+
+/**
  * Envía una notificación de WhatsApp a través del webhook de n8n
  */
 export async function sendWhatsAppNotification(params: {
     telefonos: string[];
     mensaje: string;
     tipo_mensaje: string;
+    delay?: boolean;
+    tiempo?: number;
 }): Promise<boolean> {
     const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
 
-    if (!webhookUrl || webhookUrl.includes('your-n8n-webhook-url-here')) {
-        console.warn('Webhook n8n no configurado. Saltando notificación.');
+    // Limpieza de números (remover todo lo que no sea dígito, EXCEPTO si es el grupo)
+    const telefonosLimpios = params.telefonos
+        .map(t => {
+            // Si es el grupo específico, dejarlo tal cual
+            if (t.toLowerCase() === 'grupo campamento 2026') return t;
+            // Si no, limpiar
+            return t.replace(/\D/g, '');
+        })
+        .filter(t => t.length > 0);
+
+    if (!webhookUrl) {
+        console.error('ERROR: Webhook n8n no configurado. Faltan variables de entorno.');
         return false;
     }
 
+    if (telefonosLimpios.length === 0) {
+        console.warn('⚠️ No hay destinatarios válidos (lista vacía).');
+        return false;
+    }
+
+
+
     try {
-        const response = await fetch(webhookUrl, {
+        const payload = {
+            telefonos: telefonosLimpios,
+            mensaje: params.mensaje,
+            tipo: params.tipo_mensaje, // "general", "bienvenida", "pago", etc.
+            timestamp: new Date().toISOString(),
+            delay: params.delay || false,
+            tiempo: params.tiempo || 0
+        };
+
+        // Re-executing fetch with correct payload object construction logic
+        const finalResponse = await fetch(webhookUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                telefonos: params.telefonos,
-                mensaje: params.mensaje,
-                origen_id: 'whatsapp_recepcion_vrindavan',
-                tipo_mensaje: params.tipo_mensaje,
-            }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
 
-        return response.ok;
+        if (!finalResponse.ok) {
+            const errorText = await finalResponse.text();
+            console.error(`❌ Webhook Error [${finalResponse.status}]: ${errorText}`);
+            return false;
+        }
+
+        return true;
     } catch (error) {
         console.error('Error enviando notificación WhatsApp:', error);
         return false;

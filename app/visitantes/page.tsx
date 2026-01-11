@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Counter } from '@/components/ui/Counter';
 import { UserPlus, CheckCircle } from 'lucide-react';
 import { getNoonTimestamp } from '@/lib/utils';
 
@@ -18,12 +19,21 @@ export default function VisitantesPage() {
         monto_pagado: 0,
         observaciones: '',
     });
+    const [celular, setCelular] = useState('');
+    const [sillas, setSillas] = useState(0);
+    const [mesas, setMesas] = useState(0);
+    const [dias, setDias] = useState(1);
+    const [fechaIngreso, setFechaIngreso] = useState('');
+    const [fechaEgreso, setFechaEgreso] = useState('');
+    const [vehiculo, setVehiculo] = useState<'ninguno' | 'auto' | 'moto'>('ninguno');
+    const [guardando, setGuardando] = useState(false);
+    const [mensajeExito, setMensajeExito] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!formData.nombre_completo) {
-            alert('Por favor ingresa el nombre del visitante.');
+            // No alert
             return;
         }
 
@@ -43,7 +53,20 @@ export default function VisitantesPage() {
 
             if (error) throw error;
 
-            alert('¡Registro guardado exitosamente!');
+            // Success - no alert
+
+            // Mostrar mensaje de éxito
+            setMensajeExito(true);
+            setTimeout(() => setMensajeExito(false), 3000);
+
+            // Reset form
+            setCelular('');
+            setSillas(0);
+            setMesas(0);
+            setDias(1);
+            setFechaIngreso('');
+            setFechaEgreso('');
+            setVehiculo('ninguno');
 
             // Limpiar formulario
             setFormData({
@@ -56,7 +79,7 @@ export default function VisitantesPage() {
 
         } catch (error) {
             console.error('Error al registrar visita:', error);
-            alert('Error al guardar el registro. Por favor intente nuevamente.');
+            // Error logged
         } finally {
             setLoading(false);
         }
@@ -68,12 +91,25 @@ export default function VisitantesPage() {
                 {/* Header */}
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold text-primary">
-                        Visitantes del Día
+                        Carga Express - Visitantes
                     </h1>
                     <p className="text-muted mt-1">
-                        Registro rápido para personas que no acampan (menos de 30 segundos)
+                        Registro rápido de llegadas del día
                     </p>
                 </div>
+
+                {/* Mensaje de éxito */}
+                {mensajeExito && (
+                    <div className="bg-success/10 border-2 border-success rounded-lg p-4 flex items-center gap-3 animate-fade-in">
+                        <div className="w-8 h-8 rounded-full bg-success flex items-center justify-center">
+                            <CheckCircle className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <p className="font-medium text-success">¡Visitante registrado exitosamente!</p>
+                            <p className="text-sm text-muted">Los datos se guardaron correctamente.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Formulario de Carga Rápida */}
                 <Card>

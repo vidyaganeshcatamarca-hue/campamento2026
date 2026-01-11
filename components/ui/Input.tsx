@@ -4,9 +4,10 @@ import { cn } from '@/lib/utils';
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     error?: string;
+    icon?: React.ReactNode;
 }
 
-export function Input({ label, error, className, ...props }: InputProps) {
+export function Input({ label, error, icon, className = '', ...props }: InputProps) {
     return (
         <div className="w-full">
             {label && (
@@ -14,14 +15,17 @@ export function Input({ label, error, className, ...props }: InputProps) {
                     {label}
                 </label>
             )}
-            <input
-                className={cn(
-                    'input',
-                    error && 'border-danger focus:ring-danger',
-                    className
+            <div className="relative">
+                {icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+                        {icon}
+                    </div>
                 )}
-                {...props}
-            />
+                <input
+                    className={`input ${icon ? 'pl-10' : ''} ${error ? 'border-danger' : ''} ${className}`}
+                    {...props}
+                />
+            </div>
             {error && (
                 <p className="mt-1 text-sm text-danger">{error}</p>
             )}

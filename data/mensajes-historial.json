@@ -1,0 +1,135 @@
+[
+  {
+    "id": "1767937249836",
+    "mensaje": "hola",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-09T05:40:49.836Z"
+  },
+  {
+    "id": "1767937258968",
+    "mensaje": "esto es una prueba\n",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-09T05:40:58.968Z"
+  },
+  {
+    "id": "1768022373730",
+    "mensaje": "hola grupo",
+    "audiencia": "Todos los activos",
+    "destinatarios": 3,
+    "fecha": "2026-01-10T05:19:33.730Z"
+  },
+  {
+    "id": "1768023581511",
+    "mensaje": "hola, webhokk y config nuevos",
+    "audiencia": "Todos los activos",
+    "destinatarios": 3,
+    "fecha": "2026-01-10T05:39:41.511Z"
+  },
+  {
+    "id": "1768023630989",
+    "mensaje": "hola, webhokk y config nuevos",
+    "audiencia": "Todos los activos",
+    "destinatarios": 3,
+    "fecha": "2026-01-10T05:40:30.989Z"
+  },
+  {
+    "id": "1768023859831",
+    "mensaje": "xxx",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-10T05:44:19.831Z"
+  },
+  {
+    "id": "1768024054473",
+    "mensaje": "xxx",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-10T05:47:34.473Z"
+  },
+  {
+    "id": "1768024125633",
+    "mensaje": "xxx",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-10T05:48:45.633Z"
+  },
+  {
+    "id": "1768024459110",
+    "mensaje": "hola",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-10T05:54:19.110Z"
+  },
+  {
+    "id": "1768024888435",
+    "mensaje": "xxx",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-10T06:01:28.435Z"
+  },
+  {
+    "id": "1768025161311",
+    "mensaje": "son 5 destinatarios",
+    "audiencia": "Todos los activos",
+    "destinatarios": 5,
+    "fecha": "2026-01-10T06:06:01.311Z"
+  },
+  {
+    "id": "1768025179026",
+    "mensaje": "son 5 destinatarios",
+    "audiencia": "Todos los activos",
+    "destinatarios": 5,
+    "fecha": "2026-01-10T06:06:19.026Z"
+  },
+  {
+    "id": "1768025279991",
+    "mensaje": "deudores paguen",
+    "audiencia": "Solo deudores",
+    "destinatarios": 4,
+    "fecha": "2026-01-10T06:07:59.991Z"
+  },
+  {
+    "id": "1768099718833",
+    "mensaje": "deudores paguen",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T02:48:38.833Z"
+  },
+  {
+    "id": "1768100127233",
+    "mensaje": "son 5 destinatarios",
+    "audiencia": "Solo deudores",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T02:55:27.233Z"
+  },
+  {
+    "id": "1768100800780",
+    "mensaje": "son 5 destinatarios",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T03:06:40.780Z"
+  },
+  {
+    "id": "1768100827946",
+    "mensaje": "son 5 destinatarios",
+    "audiencia": "Todos los activos",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T03:07:07.946Z"
+  },
+  {
+    "id": "1768102810378",
+    "mensaje": "test grupos mesnsajes",
+    "audiencia": "Solo deudores",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T03:40:10.378Z"
+  },
+  {
+    "id": "1768102836646",
+    "mensaje": "testeo de grupos",
+    "audiencia": "Solo deudores",
+    "destinatarios": 1,
+    "fecha": "2026-01-11T03:40:36.646Z"
+  }
+]

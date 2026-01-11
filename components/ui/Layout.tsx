@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
     Home,
     UserCheck,
@@ -11,7 +11,10 @@ import {
     MessageSquare,
     LogOut,
     BarChart3,
-    UserCog
+    UserCog,
+    ShoppingBag,
+    Shield,
+    MapPin
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,15 +26,62 @@ const navigation = [
     { name: 'Recepción', href: '/recepcion', icon: UserCheck },
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Visitantes', href: '/visitantes', icon: Users },
-    { name: 'Check-out', href: '/checkout', icon: LogOut },
+    { name: 'Kiosco', href: '/kiosco', icon: ShoppingBag },
+    { name: 'Auditoría Kiosco', href: '/kiosco-auditoria', icon: BarChart3 },
     { name: 'Caja', href: '/caja', icon: DollarSign },
-    { name: 'Ocupación', href: '/ocupacion', icon: BarChart3 },
+    { name: 'Ocupación', href: '/ocupacion', icon: MapPin },
     { name: 'Deudores', href: '/deudores', icon: UserCog },
     { name: 'Mensajería', href: '/mensajeria', icon: MessageSquare },
 ];
 
+import Cookies from 'js-cookie';
+
 export function Layout({ children }: LayoutProps) {
     const pathname = usePathname();
+    const [role, setRole] = React.useState<string>('invitado');
+
+    React.useEffect(() => {
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
+    }, []);
+
+    // Definición de Permisos por Rol
+    const getAllowedRoutes = (role: string) => {
+        const common = [];
+        switch (role) {
+            case 'admin':
+                return navigation; // Todo
+            case 'recepcion':
+                return navigation.filter(i => ['Recepción', 'Dashboard', 'Visitantes', 'Kiosco', 'Ocupación', 'Mensajería'].includes(i.name));
+            case 'seguridad':
+                return navigation.filter(i => ['Ocupación', 'Visitantes'].includes(i.name));
+            case 'kiosco':
+                return navigation.filter(i => ['Kiosco', 'Auditoría Kiosco'].includes(i.name));
+            case 'medico':
+                return navigation.filter(i => ['Dashboard', 'Visitantes'].includes(i.name));
+            case 'servicio':
+                return navigation.filter(i => ['Ocupación', 'Dashboard'].includes(i.name));
+            default:
+                return [];
+        }
+    };
+
+    const router = useRouter();
+
+    const handleLogout = () => {
+        Cookies.remove('camp_session');
+        router.push('/login');
+        router.refresh();
+    };
+
+    const filteredNavigation = getAllowedRoutes(role);
 
     return (
         <div className="min-h-screen bg-background">
@@ -45,8 +95,11 @@ export function Layout({ children }: LayoutProps) {
                             </div>
                             <div>
                                 <h1 className="text-xl font-bold">Campamento Vrindavan</h1>
-                                <p className="text-xs text-secondary-light">Sistema de Gestión</p>
+                                <p className="text-xs text-secondary-light">Sistema de Gestión | {role.toUpperCase()}</p>
                             </div>
+                        </div>
+                        <div className="text-xs bg-white/10 px-2 py-1 rounded">
+                            {role === 'admin' ? 'SUPERUSER' : 'Usuario Limitado'}
                         </div>
                     </div>
                 </div>
@@ -56,7 +109,7 @@ export function Layout({ children }: LayoutProps) {
                 {/* Sidebar - Desktop */}
                 <aside className="hidden md:block w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-72px)]">
                     <nav className="p-4 space-y-1">
-                        {navigation.map((item) => {
+                        {filteredNavigation.map((item) => {
                             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                             const Icon = item.icon;
 
@@ -68,7 +121,7 @@ export function Layout({ children }: LayoutProps) {
                                         'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
                                         isActive
                                             ? 'bg-primary text-white'
-                                            : 'text-foreground hover:bg-secondary-light hover:text-white'
+                                            : 'text-foreground hover:bg-secondary-light hover:text-primary'
                                     )}
                                 >
                                     <Icon className="w-5 h-5" />
@@ -76,6 +129,15 @@ export function Layout({ children }: LayoutProps) {
                                 </Link>
                             );
                         })}
+
+                        {/* Logout Button */}
+                        <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors mt-4"
+                        >
+                            <LogOut className="w-5 h-5" />
+                            <span className="font-medium">Cerrar Sesión</span>
+                        </button>
                     </nav>
                 </aside>
 
@@ -88,9 +150,9 @@ export function Layout({ children }: LayoutProps) {
             </div>
 
             {/* Mobile Bottom Navigation */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
                 <div className="grid grid-cols-4 gap-1 p-2">
-                    {navigation.slice(0, 4).map((item) => {
+                    {filteredNavigation.slice(0, 4).map((item) => {
                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                         const Icon = item.icon;
 
