@@ -26,7 +26,7 @@ export default function LoginPage() {
             const { data, error: dbError } = await supabase
                 .from('usuarios_sistema')
                 .select('*')
-                .eq('username', username)
+                .eq('username', username.trim().toLowerCase())
                 .single();
 
             if (dbError || !data) {
@@ -34,13 +34,13 @@ export default function LoginPage() {
             }
 
             // 2. Validate Password (Simple text for MVP as requested)
-            if (data.password !== password) {
+            if (data.password !== password.trim()) {
                 throw new Error('Contraseña incorrecta');
             }
 
             // 3. Set Session Cookie (Expires in 1 day)
             // Using logic compatible with middleware
-            Cookies.set('camp_session', JSON.stringify({ user: username, role: data.role }), { expires: 1 });
+            Cookies.set('camp_session', JSON.stringify({ user: username.trim().toLowerCase(), role: data.role }), { expires: 1 });
 
             // 4. Redirect
             router.push('/dashboard');
