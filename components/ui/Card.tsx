@@ -1,14 +1,11 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-interface CardProps {
-    children: React.ReactNode;
-    className?: string;
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
     hover?: boolean;
-    onClick?: () => void;
 }
 
-export function Card({ children, className, hover = false, onClick }: CardProps) {
+export function Card({ children, className, hover = false, ...props }: CardProps) {
     return (
         <div
             className={cn(
@@ -16,7 +13,7 @@ export function Card({ children, className, hover = false, onClick }: CardProps)
                 hover && 'card-hover',
                 className
             )}
-            onClick={onClick}
+            {...props}
         >
             {children}
         </div>

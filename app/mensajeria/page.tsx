@@ -24,7 +24,7 @@ export default function MensajeriaPage() {
 
     const [allAcampantes, setAllAcampantes] = useState<any[]>([]);
 
-    const [audiencia, setAudiencia] = useState<'todos' | 'deudores'>('todos');
+    const [audiencia, setAudiencia] = useState<'todos' | 'deudores' | 'grupo'>('todos');
     const [mensaje, setMensaje] = useState('');
     const [destinatarios, setDestinatarios] = useState<string[]>([]);
 

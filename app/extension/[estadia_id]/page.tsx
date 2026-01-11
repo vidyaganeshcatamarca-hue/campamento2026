@@ -81,10 +81,10 @@ export default function ExtensionPage() {
         // Convert to days (rounding up to ensure partial days count as 1 if logic dictates, though here diff should be exact days)
         const diasAdicionales = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diasAdicionales <= 0) return { diasAdicionales: 0, costoTotal: 0, puedeExtender: false };
+        if (diasAdicionales <= 0) return { diasAdicionales: 0, costoExtension: 0, costoDiarioTotal: 0, puedeExtender: false };
 
         // 1. Costo Persona Diario
-        const costoPersonaDiario = estadia.es_habitacion
+        const costoPersonaDiario = (estadia.cant_camas > 0)
             ? (estadia.cant_personas_total || 0) * estadia.p_cama
             : (estadia.cant_personas_total || 0) * estadia.p_persona;
 
