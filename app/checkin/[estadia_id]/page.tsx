@@ -201,7 +201,7 @@ export default function CheckInPage() {
                     // ingreso_confirmado: se mantiene false hasta liquidación
                     fecha_ingreso: estadia.fecha_ingreso,
                     fecha_egreso_programada: estadia.fecha_egreso_programada,
-                    cant_dias: cantDiasFinal, // UPDATE EXPLICIT
+                    // cant_dias: cantDiasFinal, // REMOVED: Column likely doesn't exist. View should calculate from dates.
                     cant_parcelas_total: estadia.cant_parcelas_total,
                     cant_sillas_total: estadia.cant_sillas_total,
                     cant_mesas_total: estadia.cant_mesas_total,
@@ -220,10 +220,10 @@ export default function CheckInPage() {
 
             // Navegar a liquidación
             router.push(`/liquidacion/${estadiaId}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error al confirmar ingreso:', error);
             setSaving(false);
-            toast.error('Error al guardar datos');
+            toast.error(`Error al guardar: ${error.message || 'Error desconocido'}`);
         }
     };
 
