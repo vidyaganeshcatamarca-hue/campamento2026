@@ -50,34 +50,26 @@ export default function ReporteTransferenciasPage() {
 
             // 2. Enriquecer con datos del responsable
             const pagosEnriquecidos = await Promise.all(pagosData.map(async (pago) => {
-                // Obtener responsable de la estadía
-                const { data: responsable, error: respError } = await supabase
+                // Obtener TODOS los acampantes de la estadía para encontrar el mejor candidato
+                const { data: acampantes, error: acampError } = await supabase
                     .from('acampantes')
-                    .select('nombre_completo, dni, celular')
-                    .eq('estadia_id', pago.estadia_id)
-                    .eq('es_responsable_pago', true)
-                    .single();
+                    .select('nombre_completo, dni, celular, es_responsable_pago')
+                    .eq('estadia_id', pago.estadia_id);
 
-                // Si no hay responsable marcado, intentar buscar cualquiera de la estadía
                 let nombre = 'Desconocido';
                 let dni = '-';
                 let celular = '-';
 
-                if (responsable) {
-                    nombre = responsable.nombre_completo;
-                    dni = responsable.dni || '-';
-                    celular = responsable.celular || '-';
-                } else {
-                    const { data: cualquier } = await supabase
-                        .from('acampantes')
-                        .select('nombre_completo, dni')
-                        .eq('estadia_id', pago.estadia_id)
-                        .limit(1)
-                        .single();
-                    if (cualquier) {
-                        nombre = cualquier.nombre_completo;
-                        dni = cualquier.dni || '-';
-                    }
+                if (acampantes && acampantes.length > 0) {
+                    // Prioridad 1: Responsable de pago marcado
+                    const responsable = acampantes.find(a => a.es_responsable_pago);
+
+                    // Prioridad 2: El primer acampante de la lista (si no hay responsable marcado)
+                    const candidato = responsable || acampantes[0];
+
+                    nombre = candidato.nombre_completo;
+                    dni = candidato.dni || '-';
+                    celular = candidato.celular || '-';
                 }
 
                 return {

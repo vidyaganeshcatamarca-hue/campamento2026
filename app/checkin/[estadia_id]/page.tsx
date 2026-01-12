@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/Button';
 import { Counter } from '@/components/ui/Counter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { AlertTriangle, Save, CheckCircle, Eye, EyeOff, Users } from 'lucide-react';
+import { AlertTriangle, Save, CheckCircle, Eye, EyeOff, Users, MapPin } from 'lucide-react';
 import { getNoonTimestamp, sendWhatsAppNotification, replaceTemplate } from '@/lib/utils';
 import { MJE_BIENVENIDA_PERSONAL, MJE_BIENVENIDA_GENERAL } from '@/lib/mensajes';
+import { differenceInDays } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/Dialog';
 import { toast } from 'sonner';
 
 interface ParcelaConInfo extends Parcela {
@@ -34,6 +36,10 @@ export default function CheckInPage() {
     const [parcelasSeleccionadas, setParcelasSeleccionadas] = useState<number[]>([]);
     const [inputManual, setInputManual] = useState(''); // BUG K State
     const [showOcupadas, setShowOcupadas] = useState(false);
+
+    // Bug P: Custom Dialog State
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [pendingParcela, setPendingParcela] = useState<ParcelaConInfo | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -171,6 +177,13 @@ export default function CheckInPage() {
 
             // 2. Actualizar estadía (sin confirmar ingreso todavía)
             // El ingreso se confirmará en liquidación al finalizar pago
+
+            // Bug F: Calcular cantidad de noches (días) para asegurar recálculo en liquidación
+            const fechaIngresoDate = new Date(estadia.fecha_ingreso);
+            const fechaEgresoDate = new Date(estadia.fecha_egreso_programada);
+            const diasCalculados = differenceInDays(fechaEgresoDate, fechaIngresoDate);
+            const cantDiasFinal = diasCalculados > 0 ? diasCalculados : 1; // Mínimo 1 noche
+
             const { error: estadiaError } = await supabase
                 .from('estadias')
                 .update({
@@ -178,6 +191,7 @@ export default function CheckInPage() {
                     // ingreso_confirmado: se mantiene false hasta liquidación
                     fecha_ingreso: estadia.fecha_ingreso,
                     fecha_egreso_programada: estadia.fecha_egreso_programada,
+                    cant_dias: cantDiasFinal, // UPDATE EXPLICIT
                     cant_parcelas_total: estadia.cant_parcelas_total,
                     cant_sillas_total: estadia.cant_sillas_total,
                     cant_mesas_total: estadia.cant_mesas_total,
@@ -200,6 +214,16 @@ export default function CheckInPage() {
             console.error('Error al confirmar ingreso:', error);
             setSaving(false);
             toast.error('Error al guardar datos');
+        }
+    };
+
+    const confirmParcelaSelection = () => {
+        if (pendingParcela) {
+            toggleParcela(pendingParcela.id);
+            setPendingParcela(null);
+            setShowConfirmDialog(false);
+            setInputManual('');
+            toast.success(`Parcela ${pendingParcela.nombre_parcela} agregada`);
         }
     };
 
@@ -424,11 +448,8 @@ export default function CheckInPage() {
                                                     if (parcelaFound) {
                                                         // BUG L: Click logic reuse
                                                         if (parcelaFound.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcelaFound.id)) {
-                                                            if (confirm(`La parcela ${parcelaFound.nombre_parcela} está OCUPADA. ¿Deseas asignarla de todas formas?`)) {
-                                                                toggleParcela(parcelaFound.id);
-                                                                setInputManual('');
-                                                                toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
-                                                            }
+                                                            setPendingParcela(parcelaFound);
+                                                            setShowConfirmDialog(true);
                                                         } else if (!parcelasSeleccionadas.includes(parcelaFound.id)) {
                                                             toggleParcela(parcelaFound.id);
                                                             setInputManual('');
@@ -474,11 +495,10 @@ export default function CheckInPage() {
                                         // Buscar parcela por ID numérico en el nombre
                                         const parcela = parcelasDisponibles.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
                                         if (parcela) {
-                                            // Bug L Fix: Asegurar propagación
+                                            // Bug L Fix: Asegurar propagación & Bug P: Custom Dialog
                                             if (parcela.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcela.id)) {
-                                                if (confirm(`La parcela ${parcela.nombre_parcela} está OCUPADA por ${parcela.responsable_nombre || 'alguien'}. ¿Deseas asignarla de todas formas (compartir)?`)) {
-                                                    toggleParcela(parcela.id);
-                                                }
+                                                setPendingParcela(parcela);
+                                                setShowConfirmDialog(true);
                                             } else {
                                                 toggleParcela(parcela.id);
                                             }
@@ -515,7 +535,39 @@ export default function CheckInPage() {
                         {saving ? 'Confirmando...' : 'Confirmar Ingreso'}
                     </Button>
                 </div>
+                </div>
             </div>
-        </Layout>
+
+            <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600">
+                            <AlertTriangle className="w-5 h-5" />
+                            Parcela Ocupada
+                        </DialogTitle>
+                        <DialogDescription>
+                            Esta parcela ya tiene ocupantes registrados.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <p className="font-semibold text-lg">{pendingParcela?.nombre_parcela}</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Ocupada por: <span className="font-medium text-gray-800">{pendingParcela?.responsable_nombre || 'Desconocido'}</span>
+                        </p>
+                        <p className="text-sm mt-4 bg-amber-50 p-3 rounded text-amber-800">
+                            ¿Estás seguro/a que deseas asignar esta parcela de todas formas (compartida)?
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+                            Cancelar
+                        </Button>
+                        <Button variant="primary" onClick={confirmParcelaSelection}>
+                            Confirmar Compartir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </Layout >
     );
 }
