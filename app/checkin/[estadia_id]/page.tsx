@@ -171,7 +171,10 @@ export default function CheckInPage() {
                     contacto_emergencia: acampante.contacto_emergencia,
                     es_responsable_pago: acampante.es_responsable_pago,
                 })
-                .eq('id', acampante.id); // FIX: Use stable ID, not mutable celular
+                // FIX: 'id' column does not exist. Use estadia_id + responsible flag to identify the row.
+                // This allows updating the phone number (celular) safely without losing the row reference.
+                .eq('estadia_id', estadiaId)
+                .eq('es_responsable_pago', true);
 
             if (acampanteError) throw acampanteError;
 
