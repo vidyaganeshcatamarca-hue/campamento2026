@@ -12,6 +12,7 @@ import { DollarSign, CheckCircle, Send, MessageCircle } from 'lucide-react';
 import { formatCurrency, sendWhatsAppNotification, replaceTemplate } from '@/lib/utils';
 import { MJE_BIENVENIDA_PERSONAL, MJE_BIENVENIDA_GENERAL } from '@/lib/mensajes';
 import { toast } from 'sonner';
+import { differenceInDays } from 'date-fns';
 
 import { cargarAcampantes, cargarEstadiasActivas, reasignarAcampante, procesarPagoInicial } from './helpers';
 
@@ -364,12 +365,18 @@ export default function LiquidacionPage() {
     };
 
     // BUG M FIX: Calcular total en cliente (Safe calculation)
+    // Bug U Fix: Calcular días reales de estadía para recursos (no usar dias_parcela de la vista que suma por persona)
+    const diasEstadiaReal = vistaEstadia ? Math.max(1, differenceInDays(
+        new Date(vistaEstadia.fecha_egreso_programada),
+        vistaEstadia.fecha_ingreso ? new Date(vistaEstadia.fecha_ingreso) : new Date()
+    )) : 1;
+
     const calcCamping = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona : 0;
-    const calcParcelas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela : 0;
-    const calcCamas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama : 0;
-    const calcSillas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
-    const calcMesas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
-    const calcVehiculo = vistaEstadia ? vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo : 0;
+    const calcParcelas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela : 0;
+    const calcCamas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama : 0;
+    const calcSillas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
+    const calcMesas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
+    const calcVehiculo = vistaEstadia ? diasEstadiaReal * vistaEstadia.p_vehiculo : 0;
 
     const totalCalculado = calcCamping + calcParcelas + calcCamas + calcSillas + calcMesas + calcVehiculo;
 
@@ -578,7 +585,7 @@ export default function LiquidacionPage() {
                         {(vistaEstadia.cant_parcelas_camping || 0) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted">
-                                    Parcelas: {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_parcelas_camping} × {formatCurrency(vistaEstadia.p_parcela)}
+                                    Parcelas: {diasEstadiaReal} días × {vistaEstadia.cant_parcelas_camping} × {formatCurrency(vistaEstadia.p_parcela)}
                                 </span>
                                 <span className="font-medium">
                                     {formatCurrency(calcParcelas)}
@@ -590,7 +597,7 @@ export default function LiquidacionPage() {
                         {(vistaEstadia.cant_camas || 0) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted">
-                                    Camas (habitación): {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_camas} × {formatCurrency(vistaEstadia.p_cama)}
+                                    Camas (habitación): {diasEstadiaReal} días × {vistaEstadia.cant_camas} × {formatCurrency(vistaEstadia.p_cama)}
                                 </span>
                                 <span className="font-medium text-accent">
                                     {formatCurrency(calcCamas)}
@@ -603,13 +610,13 @@ export default function LiquidacionPage() {
                             <>
                                 {(vistaEstadia.cant_sillas_total || 0) > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted">Sillas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_sillas_total}</span>
+                                        <span className="text-muted">Sillas: {diasEstadiaReal}d × {vistaEstadia.cant_sillas_total}</span>
                                         <span>{formatCurrency(calcSillas)}</span>
                                     </div>
                                 )}
                                 {(vistaEstadia.cant_mesas_total || 0) > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted">Mesas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_mesas_total}</span>
+                                        <span className="text-muted">Mesas: {diasEstadiaReal}d × {vistaEstadia.cant_mesas_total}</span>
                                         <span>{formatCurrency(calcMesas)}</span>
                                     </div>
                                 )}
@@ -619,7 +626,7 @@ export default function LiquidacionPage() {
                         {/* Vehículo */}
                         {vistaEstadia.p_vehiculo > 0 && (
                             <div className="flex justify-between">
-                                <span className="text-muted">Vehículo: {vistaEstadia.dias_parcela} días</span>
+                                <span className="text-muted">Vehículo: {diasEstadiaReal} días</span>
                                 <span>{formatCurrency(calcVehiculo)}</span>
                             </div>
                         )}
