@@ -31,6 +31,7 @@ export default function KioscoAuditoriaPage() {
     const [fechaHasta, setFechaHasta] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [ventasDelDia, setVentasDelDia] = useState<VentaDiaria[]>([]);
     const [ventasPeriodo, setVentasPeriodo] = useState<VentaDiaria[]>([]);
+    const [rendicionesPeriodo, setRendicionesPeriodo] = useState<any[]>([]); // Restored missing state
     const [ranking, setRanking] = useState<ProductoRanking[]>([]);
     const [totalDia, setTotalDia] = useState(0);
     const [transaccionesDia, setTransaccionesDia] = useState(0);
