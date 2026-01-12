@@ -171,7 +171,7 @@ export default function CheckInPage() {
                     contacto_emergencia: acampante.contacto_emergencia,
                     es_responsable_pago: acampante.es_responsable_pago,
                 })
-                .eq('celular', acampante.celular);
+                .eq('id', acampante.id); // FIX: Use stable ID, not mutable celular
 
             if (acampanteError) throw acampanteError;
 
@@ -223,7 +223,9 @@ export default function CheckInPage() {
         } catch (error: any) {
             console.error('Error al confirmar ingreso:', error);
             setSaving(false);
-            toast.error(`Error al guardar: ${error.message || 'Error desconocido'}`);
+            const msg = `Error al guardar: ${error.message || 'Error desconocido'}`;
+            toast.error(msg);
+            alert(msg); // Force visibility
         }
     };
 
