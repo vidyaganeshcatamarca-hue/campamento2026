@@ -37,6 +37,11 @@ export default function KioscoAuditoriaPage() {
     const [transaccionesDia, setTransaccionesDia] = useState(0);
     const [rendicionPendienteGlobal, setRendicionPendienteGlobal] = useState(0);
 
+    // Modal state
+    const [showModalRendicion, setShowModalRendicion] = useState(false);
+    const [montoRendicion, setMontoRendicion] = useState('');
+    const [procesandoRendicion, setProcesandoRendicion] = useState(false);
+
     useEffect(() => {
         cargarDatos();
         cargarTotalesHistoricos(); // New global fetch
