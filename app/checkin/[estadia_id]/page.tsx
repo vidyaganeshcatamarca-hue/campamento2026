@@ -32,6 +32,7 @@ export default function CheckInPage() {
     const [acampante, setAcampante] = useState<Acampante | null>(null);
     const [parcelasDisponibles, setParcelasDisponibles] = useState<ParcelaConInfo[]>([]);
     const [parcelasSeleccionadas, setParcelasSeleccionadas] = useState<number[]>([]);
+    const [inputManual, setInputManual] = useState(''); // BUG K State
     const [showOcupadas, setShowOcupadas] = useState(false);
 
     useEffect(() => {
@@ -405,41 +406,36 @@ export default function CheckInPage() {
                             </p>
                         ) : (
                             <div className="space-y-4">
-                                {/* BUG J: Manual Input */}
+                                {/* BUG K: Manual Input - Solo Enter */}
                                 <div className="flex gap-2 items-end">
                                     <div className="flex-1">
                                         <Input
                                             label="Selección Manual (Nombre o Número)"
                                             placeholder="Ej: 10, Cama 1"
-                                            value={''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                // Intentar buscar parcela por nombre exacto o numero
-                                                const parcelaFound = parcelasDisponibles.find(p =>
-                                                    p.nombre_parcela.toLowerCase() === val.toLowerCase() ||
-                                                    p.nombre_parcela === val
-                                                );
-
-                                                if (parcelaFound && !parcelasSeleccionadas.includes(parcelaFound.id)) {
-                                                    toggleParcela(parcelaFound.id);
-                                                    e.target.value = ''; // Reset input after add
-                                                    toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
-                                                }
-                                            }}
+                                            value={inputManual}
+                                            onChange={(e) => setInputManual(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
-                                                    const val = (e.currentTarget as HTMLInputElement).value;
+                                                    const val = inputManual;
                                                     const parcelaFound = parcelasDisponibles.find(p =>
                                                         p.nombre_parcela.toLowerCase() === val.toLowerCase() ||
                                                         p.nombre_parcela === val
                                                     );
                                                     if (parcelaFound) {
-                                                        if (!parcelasSeleccionadas.includes(parcelaFound.id)) {
+                                                        // BUG L: Click logic reuse
+                                                        if (parcelaFound.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcelaFound.id)) {
+                                                            if (confirm(`La parcela ${parcelaFound.nombre_parcela} está OCUPADA. ¿Deseas asignarla de todas formas?`)) {
+                                                                toggleParcela(parcelaFound.id);
+                                                                setInputManual('');
+                                                                toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
+                                                            }
+                                                        } else if (!parcelasSeleccionadas.includes(parcelaFound.id)) {
                                                             toggleParcela(parcelaFound.id);
-                                                            (e.currentTarget as HTMLInputElement).value = '';
+                                                            setInputManual('');
                                                             toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
                                                         } else {
                                                             toast.info('Ya está seleccionada');
+                                                            setInputManual('');
                                                         }
                                                     } else {
                                                         toast.error('Parcela no encontrada');
@@ -478,7 +474,7 @@ export default function CheckInPage() {
                                         // Buscar parcela por ID numérico en el nombre
                                         const parcela = parcelasDisponibles.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
                                         if (parcela) {
-                                            // BUG I: Permitir asignar ocupadas con confirmación (o directa si el usuario quiere)
+                                            // Bug L Fix: Asegurar propagación
                                             if (parcela.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcela.id)) {
                                                 if (confirm(`La parcela ${parcela.nombre_parcela} está OCUPADA por ${parcela.responsable_nombre || 'alguien'}. ¿Deseas asignarla de todas formas (compartir)?`)) {
                                                     toggleParcela(parcela.id);

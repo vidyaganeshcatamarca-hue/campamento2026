@@ -382,10 +382,34 @@ export default function LiquidacionPage() {
         );
     }
 
-    const subtotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
-    const totalConDescuento = subtotal - descuentoEspecial;
-    const montoNumRender = parseFloat(montoAbonar) || 0;
+    // BUG M FIX: Calcular total en cliente para asegurar coincidencia con el desglose visual
+    // (Evita discrepancias de view vs UI components)
+    const calcCamping = (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona;
+    const calcParcelas = vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela;
+    const calcCamas = vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama;
+    const calcSillas = vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla;
+    const calcMesas = vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa;
+    const calcVehiculo = vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo;
+    // const calcExtra = vistaEstadia.costo_extra || 0; // Removing invalid property
+
+    const totalCalculado = calcCamping + calcParcelas + calcCamas + calcSillas + calcMesas + calcVehiculo;
+
+    // Usar totalCalculado para Individual, totalGrupal para Grupal
+    const subtotal = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
+
+    // BUG N FIX: Forzar enteros en cálculos finales
+    const totalConDescuento = Math.ceil(subtotal - descuentoEspecial);
+    const montoNumRender = parseInt(montoAbonar) || 0; // Integer parsing
     const nuevoSaldo = totalConDescuento - montoNumRender;
+
+    useEffect(() => {
+        // Inicializar monto con el total (entero)
+        if (vistaEstadia) {
+            const inicial = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
+            setMontoAbonar(Math.ceil(inicial).toString());
+        }
+    }, [vistaEstadia, tipoCobro, totalGrupal, totalCalculado]);
+
 
     // --- DEBUG HANDLERS ---
     const handleDebugPersonal = async () => {
@@ -545,7 +569,7 @@ export default function LiquidacionPage() {
                                     Personas (camping): {vistaEstadia.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia.p_persona)}
                                 </span>
                                 <span className="font-medium">
-                                    {formatCurrency((vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona)}
+                                    {formatCurrency(calcCamping)}
                                 </span>
                             </div>
                         )}
@@ -557,7 +581,7 @@ export default function LiquidacionPage() {
                                     Parcelas: {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_parcelas_camping} × {formatCurrency(vistaEstadia.p_parcela)}
                                 </span>
                                 <span className="font-medium">
-                                    {formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela)}
+                                    {formatCurrency(calcParcelas)}
                                 </span>
                             </div>
                         )}
@@ -569,7 +593,7 @@ export default function LiquidacionPage() {
                                     Camas (habitación): {vistaEstadia.dias_parcela} días × {vistaEstadia.cant_camas} × {formatCurrency(vistaEstadia.p_cama)}
                                 </span>
                                 <span className="font-medium text-accent">
-                                    {formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama)}
+                                    {formatCurrency(calcCamas)}
                                 </span>
                             </div>
                         )}
@@ -580,13 +604,13 @@ export default function LiquidacionPage() {
                                 {(vistaEstadia.cant_sillas_total || 0) > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-muted">Sillas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_sillas_total}</span>
-                                        <span>{formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla)}</span>
+                                        <span>{formatCurrency(calcSillas)}</span>
                                     </div>
                                 )}
                                 {(vistaEstadia.cant_mesas_total || 0) > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-muted">Mesas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_mesas_total}</span>
-                                        <span>{formatCurrency(vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa)}</span>
+                                        <span>{formatCurrency(calcMesas)}</span>
                                     </div>
                                 )}
                             </>
@@ -596,7 +620,7 @@ export default function LiquidacionPage() {
                         {vistaEstadia.p_vehiculo > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted">Vehículo: {vistaEstadia.dias_parcela} días</span>
-                                <span>{formatCurrency(vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo)}</span>
+                                <span>{formatCurrency(calcVehiculo)}</span>
                             </div>
                         )}
 
