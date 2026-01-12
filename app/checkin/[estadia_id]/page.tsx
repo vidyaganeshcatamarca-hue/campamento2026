@@ -179,8 +179,8 @@ export default function CheckInPage() {
             // El ingreso se confirmará en liquidación al finalizar pago
 
             // Bug F: Calcular cantidad de noches (días) para asegurar recálculo en liquidación
-            const fechaIngresoDate = new Date(estadia.fecha_ingreso);
-            const fechaEgresoDate = new Date(estadia.fecha_egreso_programada);
+            const fechaIngresoDate = new Date(estadia.fecha_ingreso || ''); // Fix undefined
+            const fechaEgresoDate = new Date(estadia.fecha_egreso_programada || ''); // Fix undefined
             const diasCalculados = differenceInDays(fechaEgresoDate, fechaIngresoDate);
             const cantDiasFinal = diasCalculados > 0 ? diasCalculados : 1; // Mínimo 1 noche
 
@@ -534,7 +534,6 @@ export default function CheckInPage() {
                         <CheckCircle className="w-5 h-5" />
                         {saving ? 'Confirmando...' : 'Confirmar Ingreso'}
                     </Button>
-                </div>
                 </div>
             </div>
 

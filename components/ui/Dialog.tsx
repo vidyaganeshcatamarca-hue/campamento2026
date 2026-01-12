@@ -30,8 +30,12 @@ export function DialogHeader({ children }: { children: React.ReactNode }) {
     return <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-4">{children}</div>;
 }
 
-export function DialogTitle({ children }: { children: React.ReactNode }) {
-    return <h2 className="text-lg font-semibold leading-none tracking-tight">{children}</h2>;
+export function DialogTitle({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+    return <h2 className={`text-lg font-semibold leading-none tracking-tight ${className}`}>{children}</h2>;
+}
+
+export function DialogDescription({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+    return <p className={`text-sm text-muted-foreground ${className}`}>{children}</p>;
 }
 
 export function DialogFooter({ children }: { children: React.ReactNode }) {

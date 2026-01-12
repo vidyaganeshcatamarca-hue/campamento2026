@@ -23,7 +23,7 @@ export default function LiquidacionPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [vistaEstadia, setVistaEstadia] = useState<VistaEstadiaConTotales | null>(null);
-    const [descuentoEspecial, setDescuentoEspecial] = useState(0);
+    const [descuentoEspecial, setDescuentoEspecial] = useState(''); // String to fix precision input
     const [montoAbonar, setMontoAbonar] = useState(''); // Changed to string for input stability (Bug H)
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [responsableNombre, setResponsableNombre] = useState('');
@@ -180,16 +180,17 @@ export default function LiquidacionPage() {
             const wasIngresoConfirmado = vistaEstadia.ingreso_confirmado; // Check status BEFORE update (Bug A)
 
             // 1. Actualizar descuento en la estadía
-            if (descuentoEspecial > 0) {
+            const descuentoNum = parseInt(descuentoEspecial) || 0;
+            if (descuentoNum > 0) {
                 await supabase
                     .from('estadias')
-                    .update({ descuento_arbitrario: descuentoEspecial })
+                    .update({ descuento_arbitrario: descuentoNum })
                     .eq('id', estadiaId);
             }
 
             // 2. Calcular nuevo saldo
             const montoTotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
-            const nuevoSaldo = montoTotal - descuentoEspecial - montoNum;
+            const nuevoSaldo = montoTotal - descuentoNum - montoNum;
 
             // 3. Registrar el pago (SOLO SI HAY MONTO > 0)
             if (montoNum > 0) {
@@ -376,7 +377,8 @@ export default function LiquidacionPage() {
     const subtotal = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
 
     // BUG N FIX: Forzar enteros en cálculos finales
-    const totalConDescuento = Math.ceil(subtotal - descuentoEspecial);
+    const descuentoNum = parseInt(descuentoEspecial) || 0;
+    const totalConDescuento = Math.ceil(subtotal - descuentoNum);
     const montoNumRender = parseInt(montoAbonar) || 0;
     const nuevoSaldo = totalConDescuento - montoNumRender;
 
@@ -640,14 +642,13 @@ export default function LiquidacionPage() {
                         <Input
                             label="Descuento Especial ($)"
                             type="number"
-                            value={descuentoEspecial || ''}
-                            onChange={(e) => setDescuentoEspecial(parseFloat(e.target.value) || 0)}
+                            value={descuentoEspecial}
+                            onChange={(e) => setDescuentoEspecial(e.target.value)}
                             min={0}
-                            step={0.01}
                         />
 
                         {/* Total con descuento */}
-                        {descuentoEspecial > 0 && (
+                        {parseFloat(descuentoEspecial) > 0 && (
                             <div className="grid grid-cols-2 gap-2 py-2 border-t border-b border-gray-200">
                                 <span className="font-medium">Total con descuento:</span>
                                 <span className="text-right font-semibold text-accent">

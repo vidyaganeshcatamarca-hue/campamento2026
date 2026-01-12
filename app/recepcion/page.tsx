@@ -46,7 +46,7 @@ export default function RecepcionPage() {
                 .from('acampantes')
                 .select('*')
                 .in('estadia_id', estadiaIds)
-                .eq('es_responsable_pago', true); // Solo responsables
+                .in('estadia_id', estadiaIds);
 
             if (acampantesError) throw acampantesError;
 

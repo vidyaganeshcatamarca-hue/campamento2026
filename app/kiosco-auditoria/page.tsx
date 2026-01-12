@@ -44,7 +44,10 @@ export default function KioscoAuditoriaPage() {
 
     useEffect(() => {
         cargarDatos();
-        cargarTotalesHistoricos(); // New global fetch
+    }, [fechaDesde, fechaHasta]);
+
+    useEffect(() => {
+        cargarTotalesHistoricos();
     }, []);
 
     const cargarDatos = async () => {
