@@ -179,9 +179,19 @@ export default function CheckInPage() {
             // El ingreso se confirmará en liquidación al finalizar pago
 
             // Bug F: Calcular cantidad de noches (días) para asegurar recálculo en liquidación
-            const fechaIngresoDate = new Date(estadia.fecha_ingreso || ''); // Fix undefined
-            const fechaEgresoDate = new Date(estadia.fecha_egreso_programada || ''); // Fix undefined
-            const diasCalculados = differenceInDays(fechaEgresoDate, fechaIngresoDate);
+            // Robust Date Parsing to prevent crash (Bug T)
+            const fechaIngresoDate = estadia.fecha_ingreso ? new Date(estadia.fecha_ingreso) : new Date();
+            const fechaEgresoDate = estadia.fecha_egreso_programada ? new Date(estadia.fecha_egreso_programada) : new Date();
+
+            let diasCalculados = 1;
+            try {
+                if (!isNaN(fechaIngresoDate.getTime()) && !isNaN(fechaEgresoDate.getTime())) {
+                    diasCalculados = differenceInDays(fechaEgresoDate, fechaIngresoDate);
+                }
+            } catch (e) {
+                console.warn('Error calculando días:', e);
+            }
+
             const cantDiasFinal = diasCalculados > 0 ? diasCalculados : 1; // Mínimo 1 noche
 
             const { error: estadiaError } = await supabase
