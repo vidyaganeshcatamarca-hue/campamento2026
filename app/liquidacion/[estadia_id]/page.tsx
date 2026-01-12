@@ -362,6 +362,32 @@ export default function LiquidacionPage() {
         }
     };
 
+    // BUG M FIX: Calcular total en cliente (Safe calculation)
+    const calcCamping = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona : 0;
+    const calcParcelas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela : 0;
+    const calcCamas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama : 0;
+    const calcSillas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
+    const calcMesas = vistaEstadia ? vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
+    const calcVehiculo = vistaEstadia ? vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo : 0;
+
+    const totalCalculado = calcCamping + calcParcelas + calcCamas + calcSillas + calcMesas + calcVehiculo;
+
+    // Usar totalCalculado para Individual, totalGrupal para Grupal
+    const subtotal = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
+
+    // BUG N FIX: Forzar enteros en cálculos finales
+    const totalConDescuento = Math.ceil(subtotal - descuentoEspecial);
+    const montoNumRender = parseInt(montoAbonar) || 0;
+    const nuevoSaldo = totalConDescuento - montoNumRender;
+
+    // Hook at top level:
+    useEffect(() => {
+        if (vistaEstadia) {
+            const inicial = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
+            setMontoAbonar(Math.ceil(inicial).toString());
+        }
+    }, [vistaEstadia, tipoCobro, totalGrupal, totalCalculado]);
+
     if (loading) {
         return (
             <Layout>
@@ -381,34 +407,6 @@ export default function LiquidacionPage() {
             </Layout>
         );
     }
-
-    // BUG M FIX: Calcular total en cliente para asegurar coincidencia con el desglose visual
-    // (Evita discrepancias de view vs UI components)
-    const calcCamping = (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona;
-    const calcParcelas = vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela;
-    const calcCamas = vistaEstadia.dias_parcela * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama;
-    const calcSillas = vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla;
-    const calcMesas = vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa;
-    const calcVehiculo = vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo;
-    // const calcExtra = vistaEstadia.costo_extra || 0; // Removing invalid property
-
-    const totalCalculado = calcCamping + calcParcelas + calcCamas + calcSillas + calcMesas + calcVehiculo;
-
-    // Usar totalCalculado para Individual, totalGrupal para Grupal
-    const subtotal = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
-
-    // BUG N FIX: Forzar enteros en cálculos finales
-    const totalConDescuento = Math.ceil(subtotal - descuentoEspecial);
-    const montoNumRender = parseInt(montoAbonar) || 0; // Integer parsing
-    const nuevoSaldo = totalConDescuento - montoNumRender;
-
-    useEffect(() => {
-        // Inicializar monto con el total (entero)
-        if (vistaEstadia) {
-            const inicial = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
-            setMontoAbonar(Math.ceil(inicial).toString());
-        }
-    }, [vistaEstadia, tipoCobro, totalGrupal, totalCalculado]);
 
 
     // --- DEBUG HANDLERS ---
