@@ -405,6 +405,64 @@ export default function CheckInPage() {
                             </p>
                         ) : (
                             <div className="space-y-4">
+                                {/* BUG J: Manual Input */}
+                                <div className="flex gap-2 items-end">
+                                    <div className="flex-1">
+                                        <Input
+                                            label="Selección Manual (Nombre o Número)"
+                                            placeholder="Ej: 10, Cama 1"
+                                            value={''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                // Intentar buscar parcela por nombre exacto o numero
+                                                const parcelaFound = parcelasDisponibles.find(p =>
+                                                    p.nombre_parcela.toLowerCase() === val.toLowerCase() ||
+                                                    p.nombre_parcela === val
+                                                );
+
+                                                if (parcelaFound && !parcelasSeleccionadas.includes(parcelaFound.id)) {
+                                                    toggleParcela(parcelaFound.id);
+                                                    e.target.value = ''; // Reset input after add
+                                                    toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = (e.currentTarget as HTMLInputElement).value;
+                                                    const parcelaFound = parcelasDisponibles.find(p =>
+                                                        p.nombre_parcela.toLowerCase() === val.toLowerCase() ||
+                                                        p.nombre_parcela === val
+                                                    );
+                                                    if (parcelaFound) {
+                                                        if (!parcelasSeleccionadas.includes(parcelaFound.id)) {
+                                                            toggleParcela(parcelaFound.id);
+                                                            (e.currentTarget as HTMLInputElement).value = '';
+                                                            toast.success(`Parcela ${parcelaFound.nombre_parcela} agregada`);
+                                                        } else {
+                                                            toast.info('Ya está seleccionada');
+                                                        }
+                                                    } else {
+                                                        toast.error('Parcela no encontrada');
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted pb-3">Presiona Enter para agregar</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {parcelasSeleccionadas.map(pid => {
+                                        const p = parcelasDisponibles.find(pd => pd.id === pid);
+                                        return p ? (
+                                            <Badge key={pid} variant="secondary" className="flex items-center gap-1">
+                                                {p.nombre_parcela}
+                                                {p.estado === 'ocupada' && <span className="text-red-500 text-[10px]">(Ocupada)</span>}
+                                                <button onClick={() => toggleParcela(pid)} className="ml-1 hover:text-red-600">×</button>
+                                            </Badge>
+                                        ) : null;
+                                    })}
+                                </div>
+
                                 <MapaParcelas
                                     ocupadas={parcelasDisponibles
                                         .filter(p => p.estado === 'ocupada')
@@ -412,19 +470,29 @@ export default function CheckInPage() {
                                     reservadas={parcelasDisponibles
                                         .filter(p => p.estado === 'reservada')
                                         .map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
-                                    seleccionadas={parcelasSeleccionadas}
+                                    seleccionadas={parcelasSeleccionadas.map(pid => {
+                                        const p = parcelasDisponibles.find(pd => pd.id === pid);
+                                        return p ? parseInt(p.nombre_parcela.replace(/\D/g, '')) : 0;
+                                    }).filter(n => n > 0)}
                                     onSelect={(id) => {
                                         // Buscar parcela por ID numérico en el nombre
                                         const parcela = parcelasDisponibles.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
                                         if (parcela) {
-                                            toggleParcela(parcela.id);
+                                            // BUG I: Permitir asignar ocupadas con confirmación (o directa si el usuario quiere)
+                                            if (parcela.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcela.id)) {
+                                                if (confirm(`La parcela ${parcela.nombre_parcela} está OCUPADA por ${parcela.responsable_nombre || 'alguien'}. ¿Deseas asignarla de todas formas (compartir)?`)) {
+                                                    toggleParcela(parcela.id);
+                                                }
+                                            } else {
+                                                toggleParcela(parcela.id);
+                                            }
                                         }
                                     }}
                                 />
 
-                                {/* Leyenda adicional o lista textual opcional si se desea */}
                                 <div className="text-center text-sm text-muted">
-                                    <p>Selecciona las parcelas en el mapa</p>
+                                    <p>Selecciona las parcelas en el mapa o ingresa el número manualmente.</p>
+                                    <p className="text-xs mt-1">💡 Se permite seleccionar parcelas ocupadas para compartir.</p>
                                 </div>
                             </div>
                         )}

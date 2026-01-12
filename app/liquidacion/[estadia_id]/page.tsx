@@ -24,7 +24,7 @@ export default function LiquidacionPage() {
     const [saving, setSaving] = useState(false);
     const [vistaEstadia, setVistaEstadia] = useState<VistaEstadiaConTotales | null>(null);
     const [descuentoEspecial, setDescuentoEspecial] = useState(0);
-    const [montoAbonar, setMontoAbonar] = useState(0);
+    const [montoAbonar, setMontoAbonar] = useState(''); // Changed to string for input stability (Bug H)
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [responsableNombre, setResponsableNombre] = useState('');
     const [fechaPromesa, setFechaPromesa] = useState('');
@@ -166,8 +166,10 @@ export default function LiquidacionPage() {
     const handleFinalizarIngreso = async () => {
         if (!vistaEstadia) return;
 
+        const montoNum = parseFloat(montoAbonar) || 0; // Parse string input
+
         // PERMITIR MONTO 0 (Genera Deuda)
-        if (montoAbonar < 0) {
+        if (montoNum < 0) {
             alert('El monto a abonar no puede ser negativo.');
             return;
         }
@@ -175,6 +177,8 @@ export default function LiquidacionPage() {
         setSaving(true);
 
         try {
+            const wasIngresoConfirmado = vistaEstadia.ingreso_confirmado; // Check status BEFORE update (Bug A)
+
             // 1. Actualizar descuento en la estadía
             if (descuentoEspecial > 0) {
                 await supabase
@@ -185,17 +189,17 @@ export default function LiquidacionPage() {
 
             // 2. Calcular nuevo saldo
             const montoTotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
-            const nuevoSaldo = montoTotal - descuentoEspecial - montoAbonar;
+            const nuevoSaldo = montoTotal - descuentoEspecial - montoNum;
 
             // 3. Registrar el pago (SOLO SI HAY MONTO > 0)
-            if (montoAbonar > 0) {
+            if (montoNum > 0) {
                 if (tipoCobro === 'grupal') {
                     // PAGO GRUPAL
                     const { error: pagoError } = await supabase
                         .from('pagos')
                         .insert({
                             estadia_id: estadiaId, // Estadía del responsable
-                            monto_abonado: montoAbonar,
+                            monto_abonado: montoNum,
                             metodo_pago: metodoPago,
                         });
 
@@ -206,7 +210,7 @@ export default function LiquidacionPage() {
                         .from('pagos')
                         .insert({
                             estadia_id: estadiaId,
-                            monto_abonado: montoAbonar,
+                            monto_abonado: montoNum,
                             metodo_pago: metodoPago,
                         });
 
@@ -229,6 +233,8 @@ export default function LiquidacionPage() {
 
             // 4. Asignar parcela a la estadía e incrementar contador (solo individual)
             const parcelasSeleccionadasStr = localStorage.getItem(`parcelas_${estadiaId}`);
+            let parcelaNombreFinal = vistaEstadia.parcela_asignada;
+
             if (parcelasSeleccionadasStr) {
                 const parcelasSeleccionadas = JSON.parse(parcelasSeleccionadasStr);
 
@@ -243,6 +249,8 @@ export default function LiquidacionPage() {
                         .single();
 
                     if (parcelaError) throw parcelaError;
+
+                    parcelaNombreFinal = parcela.nombre_parcela; // Update for message
 
                     // Asignar parcela a la estadía
                     const { error: assignError } = await supabase
@@ -286,60 +294,62 @@ export default function LiquidacionPage() {
             // 5. Enviar Notificaciones WhatsApp (Secuencia Completa)
             try {
                 const telefono = vistaEstadia.celular_responsable;
+                const nombreParaMensaje = responsableNombre;
+                const parcelaParaMensaje = parcelaNombreFinal || 'Sin asignar';
 
-                // Determinar nombre de parcela final para el mensaje
-                let parcelaNombreFinal = vistaEstadia.parcela_asignada || 'Sin asignar';
-                // Si acabamos de asignar una, la tomamos del localStorage parseado anteriormente o de la logica
-                const parcelasSeleccionadasStrLocal = localStorage.getItem(`parcelas_${estadiaId}`); // Chequeamos de nuevo o usamos variable si pudiéramos
-                // Como no guardamos la parcela seleccionada en una variable scope superior fácil, 
-                // hacemos una pequeña consulta safe o confiamos en que 'vistaEstadia' tenía lo viejo. 
-                // Mejor: Si acabamos de actualizar la BD, el mensaje PERSONAL debería reflejarlo.
-                // Sin embargo, para no complicar, usamos un genérico si no tenemos el dato fresco, 
-                // pero el usuario verá su parcela física.
+                // Bug A: Solo enviar Bienvenida si es el PRIMER ingreso (ingreso_confirmado era false)
+                if (!wasIngresoConfirmado) {
+                    // Construcción Mensaje 1: Bienvenida Personal (Delay 120s = 2 min)
+                    const mensajePersonal = replaceTemplate(MJE_BIENVENIDA_PERSONAL, {
+                        nombre_acampante: nombreParaMensaje,
+                        parcela_asignada: parcelaParaMensaje
+                    });
 
-                // Construcción Mensaje 1: Bienvenida Personal (Delay 120s = 2 min)
-                const mensajePersonal = replaceTemplate(MJE_BIENVENIDA_PERSONAL, {
-                    nombre_acampante: responsableNombre,
-                    parcela_asignada: parcelaNombreFinal
-                });
+                    await sendWhatsAppNotification({
+                        telefonos: [telefono],
+                        mensaje: mensajePersonal,
+                        tipo_mensaje: 'bienvenida',
+                        delay: true,
+                        tiempo: 120
+                    });
 
-                await sendWhatsAppNotification({
-                    telefonos: [telefono],
-                    mensaje: mensajePersonal,
-                    tipo_mensaje: 'bienvenida',
-                    delay: true,
-                    tiempo: 120 // 120 segundos = 2 minutos
-                });
+                    // Construcción Mensaje 2: Bienvenida General (Delay 600s = 10 min)
+                    await sendWhatsAppNotification({
+                        telefonos: [telefono],
+                        mensaje: MJE_BIENVENIDA_GENERAL,
+                        tipo_mensaje: 'general',
+                        delay: true,
+                        tiempo: 600
+                    });
+                }
 
-                // Construcción Mensaje 2: Bienvenida General (Delay 600s = 10 min)
-                await sendWhatsAppNotification({
-                    telefonos: [telefono],
-                    mensaje: MJE_BIENVENIDA_GENERAL,
-                    tipo_mensaje: 'general',
-                    delay: true,
-                    tiempo: 600 // 600 segundos = 10 minutos
-                });
+                // Bug A: SIEMPRE enviar Recibo si hubo pago o si es confirmación
+                // Construcción Mensaje 3: Recibo de Pago (Delay 240s = 4 min o Inmediato si es re-pago)
+                // Si ya estaba confirmado, enviamos recibo con menos delay (ej: 10s) para que llegue rápido.
+                const delayRecibo = wasIngresoConfirmado ? 10 : 240;
 
-                // Construcción Mensaje 3: Recibo de Pago (Delay 240s = 4 min)
                 const detalleSaldo = nuevoSaldo > 0
                     ? `📉 *Saldo Pendiente:* ${formatCurrency(nuevoSaldo)}\n📅 *Compromiso:* ${fechaPromesa ? new Date(fechaPromesa).toLocaleDateString('es-AR') : 'A definir'}`
                     : '🎉 *¡Estadía completa saldada!*';
 
-                const mensajeRecibo = `Hola ${responsableNombre}, ¡nos alegra recibirte! 🏕️\n\nAquí tienes el resumen de tu ingreso:\n\n📋 *Total Estadía:* ${formatCurrency(montoTotal)}\n✅ *Abonaste:* ${formatCurrency(montoAbonar)} (${metodoPago})\n${detalleSaldo}\n\n¡Que disfruten mucho del campamento! Ante cualquier duda, estamos en recepción.`;
+                const mensajeRecibo = `Hola ${nombreParaMensaje}, recibimos tu pago correctamente. 🧾\n\n📝 *Resumen:* \n\n📋 *Total Actual:* ${formatCurrency(montoTotal)}\n✅ *Abonaste:* ${formatCurrency(montoNum)} (${metodoPago})\n${detalleSaldo}\n\nGracias por cumplir con el compromiso. ¡Sigan disfrutando!`;
 
-                await sendWhatsAppNotification({
-                    telefonos: [telefono],
-                    mensaje: mensajeRecibo,
-                    tipo_mensaje: 'recibo_ingreso',
-                    delay: true,
-                    tiempo: 240 // 240 segundos = 4 minutos
-                });
+                // Solo enviar recibo si hubo pago > 0 o si se confirmó ingreso (aunque sea saldo 0)
+                if (montoNum > 0 || !wasIngresoConfirmado) {
+                    await sendWhatsAppNotification({
+                        telefonos: [telefono],
+                        mensaje: mensajeRecibo,
+                        tipo_mensaje: 'recibo_ingreso', // Reusamos tipo
+                        delay: true,
+                        tiempo: delayRecibo
+                    });
+                }
 
-                toast.success('Ingreso finalizado y mensajes enviados.');
+                toast.success('Operación exitosa.');
 
             } catch (msgError) {
                 console.error('Error envío WhatsApp:', msgError);
-                toast.warning('Ingreso guardado, pero hubo error enviando WhatsApp.');
+                toast.warning('Guardado, pero hubo error enviando WhatsApp.');
             }
 
             // 7. Navegar a recepción (sin alert)
@@ -347,7 +357,6 @@ export default function LiquidacionPage() {
 
         } catch (error: any) {
             console.error('Error al procesar pago:', error);
-            // Mostrar mensaje real del error para depuración
             alert(`Error al procesar el pago: ${error.message || 'Error desconocido'}`);
             setSaving(false);
         }
@@ -375,7 +384,8 @@ export default function LiquidacionPage() {
 
     const subtotal = tipoCobro === 'grupal' ? totalGrupal : vistaEstadia.monto_total_final;
     const totalConDescuento = subtotal - descuentoEspecial;
-    const nuevoSaldo = totalConDescuento - montoAbonar;
+    const montoNumRender = parseFloat(montoAbonar) || 0;
+    const nuevoSaldo = totalConDescuento - montoNumRender;
 
     // --- DEBUG HANDLERS ---
     const handleDebugPersonal = async () => {
@@ -628,8 +638,8 @@ export default function LiquidacionPage() {
                         <Input
                             label="Monto a Abonar ($) *"
                             type="number"
-                            value={montoAbonar || ''}
-                            onChange={(e) => setMontoAbonar(parseFloat(e.target.value) || 0)}
+                            value={montoAbonar} // Now string
+                            onChange={(e) => setMontoAbonar(e.target.value)} // Just update string
                             min={0}
                             step={0.01}
                             required
@@ -696,7 +706,7 @@ export default function LiquidacionPage() {
                     <Button
                         variant="primary"
                         onClick={handleFinalizarIngreso}
-                        disabled={saving || montoAbonar < 0}
+                        disabled={saving || montoNumRender < 0}
                         className="flex-1 flex items-center justify-center gap-2"
                     >
                         <CheckCircle className="w-5 h-5" />

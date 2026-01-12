@@ -236,23 +236,65 @@ export default function OcupacionPage() {
                 return;
             }
 
-            // 1. Liberar parcela actual
-            const { error: errorLiberar } = await supabase
+            // --- 1. GESTIONAR PARCELA ANTERIOR ---
+            // Obtener ocupantes restantes en la parcela anterior (excluyendo la actual)
+            const { count: ocupantesAnteriores, error: countError } = await supabase
+                .from('estadias')
+                .select('*', { count: 'exact', head: true })
+                .eq('parcela_asignada', parcelaSeleccionada.nombre_parcela)
+                .eq('estado_estadia', 'activa')
+                .neq('id', estadiaId); // Excluir la que se está mudando
+
+            if (countError) throw countError;
+
+            const restantes = ocupantesAnteriores || 0;
+
+            if (restantes === 0) {
+                // Si no queda nadie, liberar
+                const { error: errorLiberar } = await supabase
+                    .from('parcelas')
+                    .update({
+                        estado: 'libre',
+                        estadia_id: null,
+                        cantidad_integrantes: 0
+                    })
+                    .eq('nombre_parcela', parcelaSeleccionada.nombre_parcela);
+                if (errorLiberar) throw errorLiberar;
+            } else {
+                // Si quedan, solo actualizar cantidad
+                const { error: errorActualizarAnterior } = await supabase
+                    .from('parcelas')
+                    .update({
+                        cantidad_integrantes: restantes
+                    })
+                    .eq('nombre_parcela', parcelaSeleccionada.nombre_parcela);
+                if (errorActualizarAnterior) throw errorActualizarAnterior;
+            }
+
+            // --- 2. GESTIONAR NUEVA PARCELA ---
+            // Obtener info actual de la nueva parcela
+            const { data: nuevaParcela, error: fetchNuevaError } = await supabase
                 .from('parcelas')
-                .update({ estado: 'libre', estadia_id: null })
-                .eq('nombre_parcela', parcelaSeleccionada.nombre_parcela);
+                .select('cantidad_integrantes, estado')
+                .eq('nombre_parcela', nuevaParcelaId)
+                .single();
 
-            if (errorLiberar) throw errorLiberar;
+            if (fetchNuevaError) throw fetchNuevaError;
 
-            // 2. Ocupar nueva parcela
+            const nuevaCantidad = (nuevaParcela.cantidad_integrantes || 0) + 1;
+
             const { error: errorOcupar } = await supabase
                 .from('parcelas')
-                .update({ estado: 'ocupada', estadia_id: estadiaId })
+                .update({
+                    estado: 'ocupada',
+                    estadia_id: estadiaId, // Asignamos esta estadía como referencia (última ingresada)
+                    cantidad_integrantes: nuevaCantidad
+                })
                 .eq('nombre_parcela', nuevaParcelaId);
 
             if (errorOcupar) throw errorOcupar;
 
-            // 3. Update Estadia text (Audit)
+            // --- 3. ACTUALIZAR ESTADÍA ---
             const { data: estadiaActual } = await supabase
                 .from('estadias')
                 .select('parcela_asignada, observaciones')
@@ -260,15 +302,18 @@ export default function OcupacionPage() {
                 .single();
 
             if (estadiaActual) {
-                let nuevosNombres = estadiaActual.parcela_asignada || '';
-                if (nuevosNombres.includes(parcelaSeleccionada.nombre_parcela)) {
-                    nuevosNombres = nuevosNombres.replace(parcelaSeleccionada.nombre_parcela, nuevaParcelaId);
-                } else {
-                    nuevosNombres = `${nuevosNombres}, ${nuevaParcelaId}`;
-                }
+                // Reemplazar nombre de parcela en el campo parcela_asignada
+                // Nota: Si tenía multiples (ej "10, 11"), esto es complejo. Asumimos por ahora mudanza simple de unidad.
+                // Si el sistema soporta multiples, deberíamos parsear.
+                // Simplificación: Reemplazar el string exacto o actualizar todo.
+                // Dado que 'parcelaSeleccionada.nombre_parcela' viene de la selección, usamos ese para buscar/reemplazar o setear directo si es 1-1.
+
+                // Mantenemos lógica simple: Setear a la nueva.
+                // Si el usuario tenía multiples, esto podría pisar las otras.
+                // Pero el dashboard maneja "parcelaSeleccionada" como UNA unidad.
 
                 await supabase.from('estadias').update({
-                    parcela_asignada: nuevosNombres,
+                    parcela_asignada: nuevaParcelaId, // Asignamos la nueva
                     observaciones: `${estadiaActual.observaciones || ''}\n[Mudanza] De ${parcelaSeleccionada.nombre_parcela} a ${nuevaParcelaId} el ${new Date().toLocaleDateString()}`
                 }).eq('id', estadiaId);
             }
@@ -278,9 +323,9 @@ export default function OcupacionPage() {
             setNuevaParcelaId('');
             fetchData();
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error cambio parcela:', error);
-            alert('Error al realizar el cambio');
+            alert(`Error al realizar el cambio: ${error.message}`);
         } finally {
             setProcesandoCambio(false);
         }

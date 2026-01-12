@@ -185,6 +185,16 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="hidden md:flex items-center gap-2"
+                            onClick={() => router.push('/reportes/transferencias')}
+                        >
+                            <DollarSign className="w-4 h-4 text-green-600" />
+                            Transferencias
+                        </Button>
+
                         <label className={cn(
                             "flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-lg border transition-all",
                             filterRiesgo ? "bg-red-50 border-red-200 text-red-700" : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"

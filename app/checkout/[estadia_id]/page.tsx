@@ -197,11 +197,19 @@ export default function CheckoutPage() {
                             estadia_id: null,
                             cantidad_integrantes: 0 // Resetear contador si queda vacía
                         })
-                        .eq('nombre_parcela', estadia.parcela_asignada); // Usar nombre, es más seguro si estadia_id es ambiguo
+                        .eq('nombre_parcela', estadia.parcela_asignada);
 
                     if (parcelasError) throw parcelasError;
                 } else {
-                    console.log(`Parcela ${estadia.parcela_asignada} continúa ocupada por otras ${otrosOcupantes} estadías.`);
+                    // BUG B FIX: Si quedan otros, actualizar el contador al número real de ocupantes restantes
+                    await supabase
+                        .from('parcelas')
+                        .update({
+                            cantidad_integrantes: otrosOcupantes // Se ajusta al conteo real de activos
+                        })
+                        .eq('nombre_parcela', estadia.parcela_asignada);
+
+                    console.log(`Parcela ${estadia.parcela_asignada} continúa ocupada por otras ${otrosOcupantes} estadías. Contador actualizado.`);
                 }
             } else {
                 // Fallback legacy por si no tenía parcela_asignada string pero sí vínculo ID (raro con nueva lógica)
