@@ -367,9 +367,21 @@ export default function LiquidacionPage() {
 
     // BUG M FIX: Calcular total en cliente (Safe calculation)
     // Bug U Fix: Calcular días reales de estadía para recursos (no usar dias_parcela de la vista que suma por persona)
+    // BUG UTC FIX: Normalizar fechas a mediodía para evitar off-by-one por timezones.
+    // Si la fecha es '2024-01-01', new Date() puede ser UTC 00:00 -> Local Día Anterior.
+    // Agregamos T12:00:00 explícitamente.
+    const getNoonDate = (dateStr: string | undefined | null): Date => {
+        if (!dateStr) return new Date();
+        try {
+            // Cortar por si ya tiene hora, quedarnos con YYYY-MM-DD
+            const cleanDate = dateStr.split('T')[0];
+            return new Date(`${cleanDate}T12:00:00`);
+        } catch { return new Date(); }
+    };
+
     const diasEstadiaReal = vistaEstadia ? Math.max(1, differenceInDays(
-        new Date(vistaEstadia.fecha_egreso_programada),
-        vistaEstadia.fecha_ingreso ? new Date(vistaEstadia.fecha_ingreso) : new Date()
+        getNoonDate(vistaEstadia.fecha_egreso_programada),
+        getNoonDate(vistaEstadia.fecha_ingreso)
     )) : 1;
 
     const calcCamping = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona : 0;
