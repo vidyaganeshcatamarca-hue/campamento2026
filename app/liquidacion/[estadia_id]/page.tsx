@@ -58,7 +58,8 @@ export default function LiquidacionPage() {
                 .from('vista_estadias_con_totales')
                 .select('*')
                 .eq('celular_responsable', vistaEstadia.celular_responsable)
-                .eq('estado_estadia', 'activa');
+                .neq('estado_estadia', 'cancelada')
+                .neq('estado_estadia', 'finalizada');
 
             if (error) throw error;
 
