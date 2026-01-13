@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // Removed unused View import to avoid confusion
+import { supabase } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,7 +18,7 @@ interface ParcelaConEstadia {
     fecha_egreso?: string;
     estadia_id_ref?: string;
     cantidad_integrantes?: number;
-    nombres_integrantes?: string[]; // Array of names
+    integrantes_data?: { id: string; nombre: string; parcela_asignada?: string }[];
 }
 
 interface EgresoInfo {
@@ -41,7 +41,8 @@ export default function OcupacionPage() {
 
     // Role
     const [role, setRole] = useState<string>('invitado');
-    const isReadOnly = role === 'auditor' || role === 'acomodacion';
+    const isReadOnly = role === 'auditor'; // Acomodacion CAN move people now
+    const canMovePeople = role === 'admin' || role === 'acomodacion';
 
     // Separar parcelas
     const parcelasCamping = parcelas.filter(p => !p.nombre_parcela.toLowerCase().includes('cama'));
@@ -131,82 +132,80 @@ export default function OcupacionPage() {
             // 2.5 Fetch Acampantes for Active Estadias
             // We need this to show names in tooltip
             const activeIds = estadiasData?.map((e: any) => e.id) || [];
-            let acampantesMap: Record<string, string[]> = {};
+            let acampantesMap: Record<string, { id: string; nombre: string; parcela_asignada?: string }[]> = {};
 
             if (activeIds.length > 0) {
                 const { data: acampantesData } = await supabase
                     .from('acampantes')
-                    .select('estadia_id, nombre_completo')
+                    .select('id, estadia_id, nombre_completo, parcela_asignada')
                     .in('estadia_id', activeIds);
 
                 // Group by estadia_id
                 if (acampantesData) {
                     acampantesData.forEach((a: any) => {
                         if (!acampantesMap[a.estadia_id]) acampantesMap[a.estadia_id] = [];
-                        acampantesMap[a.estadia_id].push(a.nombre_completo);
+                        acampantesMap[a.estadia_id].push({ id: a.id, nombre: a.nombre_completo, parcela_asignada: a.parcela_asignada });
                     });
                 }
             }
 
             // 3. Map Data in Memory
             console.log('[Ocupacion] Mapeando datos...');
-            const parcelasConInfo: ParcelaConEstadia[] = (parcelasData || []).map((parcela: any) => {
-                let estadiasCorrespondientes: any[] = [];
 
-                if (parcela.estado === 'ocupada') {
-                    // Buscar TODAS las estadías coincidentes
-                    estadiasCorrespondientes = estadiasData?.filter((e: any) => {
-                        if (!e.parcela_asignada) return false;
-                        const pAsignada = String(e.parcela_asignada).toLowerCase().trim();
-                        const pActual = String(parcela.nombre_parcela).toLowerCase().trim();
+            // Pre-calculate occupants per parcel
+            const parcelOccupancyMap: Record<string, { id: string; nombre: string; parcela_asignada?: string; estadia_id: string }[]> = {};
 
-                        // Match exacto o en lista
-                        if (pAsignada === pActual) return true;
+            // Helper to add occupant to a parcel slot
+            const addToParcel = (parcelName: string, occupant: any) => {
+                const normalized = parcelName.trim();
+                if (!parcelOccupancyMap[normalized]) parcelOccupancyMap[normalized] = [];
+                // Avoid duplicates
+                if (!parcelOccupancyMap[normalized].find(x => x.id === occupant.id)) {
+                    parcelOccupancyMap[normalized].push(occupant);
+                }
+            };
 
-                        const asignadas = pAsignada.split(',').map((s: string) => s.trim());
-                        return asignadas.includes(pActual);
-                    }) || [];
+            // Distribute Acampantes
+            Object.entries(acampantesMap).forEach(([estadiaId, occupants]) => {
+                const estadia = estadiasData?.find((e: any) => e.id === estadiaId);
+                const defaultParcels = estadia?.parcela_asignada ? estadia.parcela_asignada.split(',') : [];
 
-                    // Fallback strategy B: ID match if empty
-                    if (estadiasCorrespondientes.length === 0 && parcela.estadia_id) {
-                        const match = estadiasData?.find((e: any) => e.id === parcela.estadia_id);
-                        if (match) estadiasCorrespondientes = [match];
+                occupants.forEach(occ => {
+                    if (occ.parcela_asignada) {
+                        // Explicit assignment override
+                        addToParcel(occ.parcela_asignada, { ...occ, estadia_id: estadiaId });
+                    } else if (defaultParcels.length > 0) {
+                        // Inherit from Estadia
+                        defaultParcels.forEach((pName: string) => {
+                            addToParcel(pName.trim(), { ...occ, estadia_id: estadiaId });
+                        });
                     }
+                });
+            });
+
+            const parcelasConInfo: ParcelaConEstadia[] = (parcelasData || []).map((parcela: any) => {
+                const occupants = parcelOccupancyMap[parcela.nombre_parcela] || [];
+
+                // Resolve Estadia Reference
+                let mainEstadiaId = parcelasData.find((p: any) => p.nombre_parcela === parcela.nombre_parcela)?.estadia_id;
+
+                // If we have occupants, prefer their estadia info for the label
+                if (occupants.length > 0) {
+                    mainEstadiaId = occupants[0].estadia_id;
                 }
 
-                if (estadiasCorrespondientes.length > 0) {
-                    // Aggregate Names from ALL stays
-                    let allNames: string[] = [];
-                    estadiasCorrespondientes.forEach(est => {
-                        const names = acampantesMap[est.id] || [];
-                        if (names.length > 0) {
-                            allNames = [...allNames, ...names];
-                        } else {
-                            allNames.push(est.celular_responsable); // Fallback
-                        }
-                    });
+                const estadiaRef = estadiasData?.find((e: any) => e.id === mainEstadiaId);
+                const estadiaNombre = estadiaRef?.celular_responsable || (occupants.length > 0 ? 'Varios' : undefined);
 
-                    // Use first stay for reference (egreso/nombre principal) but show size of group
-                    const principal = estadiasCorrespondientes[0];
-
-                    return {
-                        nombre_parcela: parcela.nombre_parcela,
-                        estado: parcela.estado || 'libre',
-                        estadia_nombre: principal.celular_responsable, // Main contact
-                        fecha_egreso: principal.fecha_egreso_programada,
-                        estadia_id_ref: principal.id,
-                        cantidad_integrantes: parcela.cantidad_integrantes,
-                        nombres_integrantes: allNames
-                    };
-                } else {
-                    return {
-                        nombre_parcela: parcela.nombre_parcela,
-                        estado: parcela.estado || 'libre',
-                        estadia_nombre: parcela.estado === 'ocupada' ? 'Ocupada' : undefined,
-                        cantidad_integrantes: parcela.cantidad_integrantes,
-                        nombres_integrantes: []
-                    };
-                }
+                return {
+                    nombre_parcela: parcela.nombre_parcela,
+                    estado: parcela.estado || 'libre',
+                    estadia_nombre: estadiaNombre,
+                    fecha_egreso: estadiaRef?.fecha_egreso_programada,
+                    estadia_id_ref: mainEstadiaId,
+                    cantidad_integrantes: parcela.cantidad_integrantes,
+                    integrantes_data: occupants
+                };
             });
 
             // 4. Update State
@@ -243,26 +242,22 @@ export default function OcupacionPage() {
             }
 
             // Usamos la Vista aquí porque necesitamos agregación y no es Blocking para la UI principal
-            // Pero si la vista falla, falla solo esta parte.
             const { data: estadiasData } = await supabase
-                .from('estadias') // Cambiado a estadias para seguridad
-                // FIX: Ensure 'parcela_asignada' is selected
+                .from('estadias')
                 .select('id, celular_responsable, fecha_egreso_programada, cant_personas_total, parcela_asignada')
                 .eq('estado_estadia', 'activa')
-                .eq('ingreso_confirmado', true) // Solo mostrar si ya ingresaron efectivamente
+                .eq('ingreso_confirmado', true)
                 .gte('fecha_egreso_programada', fechaInicio)
                 .lte('fecha_egreso_programada', fechaFin);
 
             const egresosInfo: EgresoInfo[] = [];
 
             for (const estadia of estadiasData || []) {
-                // Fetch Parcels (Primary: String parsing, Secondary: DB Ref)
                 let nombresParcelas: string[] = [];
 
                 if (estadia.parcela_asignada) {
                     nombresParcelas = estadia.parcela_asignada.split(',').map((s: string) => s.trim());
                 } else {
-                    // Fallback to table if string is empty (Legacy?)
                     const { data: parcelasData } = await supabase
                         .from('parcelas')
                         .select('nombre_parcela')
@@ -273,7 +268,6 @@ export default function OcupacionPage() {
                     }
                 }
 
-                // Fetch Name
                 const { data: acampanteData } = await supabase
                     .from('acampantes')
                     .select('nombre_completo')
@@ -311,20 +305,18 @@ export default function OcupacionPage() {
             }
 
             // --- 1. GESTIONAR PARCELA ANTERIOR ---
-            // Obtener ocupantes restantes en la parcela anterior (excluyendo la actual)
             const { count: ocupantesAnteriores, error: countError } = await supabase
                 .from('estadias')
                 .select('*', { count: 'exact', head: true })
                 .eq('parcela_asignada', parcelaSeleccionada.nombre_parcela)
                 .eq('estado_estadia', 'activa')
-                .neq('id', estadiaId); // Excluir la que se está mudando
+                .neq('id', estadiaId);
 
             if (countError) throw countError;
 
             const restantes = ocupantesAnteriores || 0;
 
             if (restantes === 0) {
-                // Si no queda nadie, liberar
                 const { error: errorLiberar } = await supabase
                     .from('parcelas')
                     .update({
@@ -335,7 +327,6 @@ export default function OcupacionPage() {
                     .eq('nombre_parcela', parcelaSeleccionada.nombre_parcela);
                 if (errorLiberar) throw errorLiberar;
             } else {
-                // Si quedan, solo actualizar cantidad
                 const { error: errorActualizarAnterior } = await supabase
                     .from('parcelas')
                     .update({
@@ -346,7 +337,6 @@ export default function OcupacionPage() {
             }
 
             // --- 2. GESTIONAR NUEVA PARCELA ---
-            // Obtener info actual de la nueva parcela
             const { data: nuevaParcela, error: fetchNuevaError } = await supabase
                 .from('parcelas')
                 .select('cantidad_integrantes, estado')
@@ -361,7 +351,7 @@ export default function OcupacionPage() {
                 .from('parcelas')
                 .update({
                     estado: 'ocupada',
-                    estadia_id: estadiaId, // Asignamos esta estadía como referencia (última ingresada)
+                    estadia_id: estadiaId,
                     cantidad_integrantes: nuevaCantidad
                 })
                 .eq('nombre_parcela', nuevaParcelaId);
@@ -376,18 +366,8 @@ export default function OcupacionPage() {
                 .single();
 
             if (estadiaActual) {
-                // Reemplazar nombre de parcela en el campo parcela_asignada
-                // Nota: Si tenía multiples (ej "10, 11"), esto es complejo. Asumimos por ahora mudanza simple de unidad.
-                // Si el sistema soporta multiples, deberíamos parsear.
-                // Simplificación: Reemplazar el string exacto o actualizar todo.
-                // Dado que 'parcelaSeleccionada.nombre_parcela' viene de la selección, usamos ese para buscar/reemplazar o setear directo si es 1-1.
-
-                // Mantenemos lógica simple: Setear a la nueva.
-                // Si el usuario tenía multiples, esto podría pisar las otras.
-                // Pero el dashboard maneja "parcelaSeleccionada" como UNA unidad.
-
                 await supabase.from('estadias').update({
-                    parcela_asignada: nuevaParcelaId, // Asignamos la nueva
+                    parcela_asignada: nuevaParcelaId,
                     observaciones: `${estadiaActual.observaciones || ''}\n[Mudanza] De ${parcelaSeleccionada.nombre_parcela} a ${nuevaParcelaId} el ${new Date().toLocaleDateString()}`
                 }).eq('id', estadiaId);
             }
@@ -400,6 +380,73 @@ export default function OcupacionPage() {
         } catch (error: any) {
             console.error('Error cambio parcela:', error);
             alert(`Error al realizar el cambio: ${error.message}`);
+        } finally {
+            setProcesandoCambio(false);
+        }
+    };
+
+    const handleMudarPersona = async (acampanteId: string, nuevaParcela: string, parcelaActual: string, estadiaId: string) => {
+        if (!canMovePeople) return;
+
+        // Check if new parcel is occupied
+        const parcelDest = parcelas.find(p => p.nombre_parcela === nuevaParcela);
+        const isDestOccupied = parcelDest?.estado === 'ocupada';
+
+        let confirmMsg = `¿Mover esta persona a la parcela ${nuevaParcela}?`;
+        if (isDestOccupied) {
+            confirmMsg = `⚠️ La parcela ${nuevaParcela} YA ESTÁ OCUPADA.\n\n¿Desea agregar a esta persona a la parcela COMPARTIDA? (Requiere consentimiento del operador)`;
+        }
+
+        if (!confirm(confirmMsg)) return;
+        setProcesandoCambio(true);
+
+        try {
+            // 1. Update Persona Location
+            const { error: moveError } = await supabase
+                .from('acampantes')
+                .update({ parcela_asignada: nuevaParcela })
+                .eq('id', acampanteId);
+
+            if (moveError) throw moveError;
+
+            // 2. Decrement Old Parcela
+            const { data: oldP } = await supabase.from('parcelas').select('cantidad_integrantes').eq('nombre_parcela', parcelaActual).single();
+            if (oldP && oldP.cantidad_integrantes > 0) {
+                const newOldCount = oldP.cantidad_integrantes - 1;
+                const updatePayload: any = { cantidad_integrantes: newOldCount };
+                if (newOldCount === 0) {
+                    updatePayload.estado = 'libre';
+                    updatePayload.estadia_id = null;
+                }
+                await supabase.from('parcelas').update(updatePayload).eq('nombre_parcela', parcelaActual);
+            }
+
+            // 3. Increment New Parcela
+            const { data: newP } = await supabase.from('parcelas').select('cantidad_integrantes, estado, estadia_id').eq('nombre_parcela', nuevaParcela).single();
+            const newCount = (newP?.cantidad_integrantes || 0) + 1;
+
+            const updateDestPayload: any = {
+                cantidad_integrantes: newCount,
+                estado: 'ocupada'
+            };
+
+            // CRITICAL: Only overwrite estadia_id if it was NULL (Free). 
+            // If it was already occupied (Shared), keep the original owner's ID to avoid hijacking the stay reference.
+            if (!newP?.estadia_id) {
+                updateDestPayload.estadia_id = estadiaId;
+            }
+
+            await supabase.from('parcelas')
+                .update(updateDestPayload)
+                .eq('nombre_parcela', nuevaParcela);
+
+            console.log('Mudanza individual exitosa');
+            await fetchData(); // Refresh to show changes
+            alert('Mudanza realizada con éxito.'); // Add feedback since toast was removed
+            setParcelaSeleccionada(null); // Close modal to refresh context
+        } catch (e: any) {
+            console.error(e);
+            alert(e.message || 'Error al mudar');
         } finally {
             setProcesandoCambio(false);
         }
@@ -439,17 +486,16 @@ export default function OcupacionPage() {
         }
     };
 
-    const getParcelasDisponibles = () => {
-        return parcelas.filter(p => p.estado === 'libre');
+    const getParcelasParaMudanza = () => {
+        // Return ALL parcels, sorted by number
+        // Maybe sort: Free first, then Occupied? Or just numeric.
+        // Let's do numeric for clarity, but label them.
+        return [...parcelas].sort((a, b) => {
+            const numA = parseInt(a.nombre_parcela.replace(/\D/g, '')) || 0;
+            const numB = parseInt(b.nombre_parcela.replace(/\D/g, '')) || 0;
+            return numA - numB;
+        });
     };
-
-    const getColorParcela = (estado: string) => {
-        if (estado === 'libre') return 'bg-green-500';
-        if (estado === 'ocupada') return 'bg-red-500';
-        return 'bg-yellow-500';
-    };
-
-    // --- RENDER ---
 
     if (loading) {
         return (
@@ -481,35 +527,76 @@ export default function OcupacionPage() {
 
     return (
         <Layout>
-            {/* Modal Mudanza */}
             {parcelaSeleccionada && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md bg-white shadow-xl">
+                    <Card className="w-full max-w-md bg-white shadow-xl max-h-[80vh] overflow-y-auto">
                         <CardHeader>
                             <CardTitle>Mudar Parcela: {parcelaSeleccionada.nombre_parcela}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <p className="text-sm text-muted">Estadía de: <span className="font-semibold">{parcelaSeleccionada.estadia_nombre}</span></p>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Nueva Parcela (Libre)</label>
-                                <select
-                                    className="w-full p-2 border rounded"
-                                    value={nuevaParcelaId}
-                                    onChange={e => setNuevaParcelaId(e.target.value)}
-                                >
-                                    <option value="">-- Seleccionar --</option>
-                                    {getParcelasDisponibles()
-                                        .sort((a, b) => a.nombre_parcela.localeCompare(b.nombre_parcela, undefined, { numeric: true }))
-                                        .map(p => (
-                                            <option key={p.nombre_parcela} value={p.nombre_parcela}>{p.nombre_parcela}</option>
-                                        ))}
-                                </select>
+
+                            <div className="space-y-3">
+                                <h4 className="font-medium text-sm">Integrantes en esta parcela:</h4>
+                                {parcelaSeleccionada.integrantes_data?.map((integ) => (
+                                    <div key={integ.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                                        <span className="text-sm">{integ.nombre}</span>
+                                        {canMovePeople && (
+                                            <div className="flex gap-2">
+                                                <select
+                                                    className="text-xs p-1 border rounded w-24"
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            handleMudarPersona(integ.id, e.target.value, parcelaSeleccionada.nombre_parcela, parcelaSeleccionada.estadia_id_ref!);
+                                                        }
+                                                    }}
+                                                    value=""
+                                                >
+                                                    <option value="">Mudar a...</option>
+                                                    {getParcelasParaMudanza().map(p => (
+                                                        <option key={p.nombre_parcela} value={p.nombre_parcela}>
+                                                            {p.nombre_parcela} {p.estado === 'ocupada' ? '(Compartida)' : '(Libre)'}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {(!parcelaSeleccionada.integrantes_data || parcelaSeleccionada.integrantes_data.length === 0) && (
+                                    <p className="text-xs text-muted italic">Sin integrantes registrados nominalmente.</p>
+                                )}
                             </div>
+
+                            <div className="border-t pt-4 mt-4">
+                                <h4 className="font-medium text-sm mb-2 text-muted">Mudanza Masiva (Toda la Estadía)</h4>
+                                <div className="flex gap-2">
+                                    <select
+                                        className="w-full p-2 border rounded text-sm"
+                                        value={nuevaParcelaId}
+                                        onChange={e => setNuevaParcelaId(e.target.value)}
+                                        disabled={!canMovePeople}
+                                    >
+                                        <option value="">-- Mudar TODOS a... --</option>
+                                        {getParcelasParaMudanza()
+                                            .sort((a, b) => a.nombre_parcela.localeCompare(b.nombre_parcela, undefined, { numeric: true }))
+                                            .map(p => (
+                                                <option key={p.nombre_parcela} value={p.nombre_parcela}>{p.nombre_parcela}</option>
+                                            ))}
+                                    </select>
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={!nuevaParcelaId || procesandoCambio || !canMovePeople}
+                                        onClick={handleCambiarParcela}
+                                    >
+                                        Mover Todo
+                                    </Button>
+                                </div>
+                            </div>
+
                             <div className="flex gap-3 justify-end mt-4">
-                                <Button variant="outline" onClick={() => setParcelaSeleccionada(null)}>Cancelar</Button>
-                                <Button variant="primary" disabled={!nuevaParcelaId || procesandoCambio} onClick={handleCambiarParcela}>
-                                    {procesandoCambio ? 'Procesando...' : 'Confirmar Mudanza'}
-                                </Button>
+                                <Button variant="outline" onClick={() => setParcelaSeleccionada(null)}>Cerrar</Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -641,6 +728,48 @@ export default function OcupacionPage() {
                     </Card>
                 )}
 
+                {/* Mobile: Lista Global de Ocupantes (Solo visible para movil + role apropiado) */}
+                <div className="md:hidden">
+                    <Card>
+                        <CardHeader><CardTitle>Ocupantes en Parcelas</CardTitle></CardHeader>
+                        <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {parcelas.filter(p => p.estado === 'ocupada').map(p => (
+                                <div key={p.nombre_parcela} className="border-b pb-2 last:border-0">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-lg">{p.nombre_parcela}</span>
+                                        <span className="text-xs text-muted">{p.estadia_nombre}</span>
+                                    </div>
+                                    <div className="pl-2 space-y-2">
+                                        {p.integrantes_data?.map(integ => (
+                                            <div key={integ.id} className="flex justify-between items-center text-sm bg-gray-50 p-1.5 rounded">
+                                                <span>{integ.nombre}</span>
+                                                {canMovePeople && (
+                                                    <select
+                                                        className="text-xs p-1 border rounded w-20"
+                                                        onChange={(e) => {
+                                                            if (e.target.value && p.estadia_id_ref) {
+                                                                handleMudarPersona(integ.id, e.target.value, p.nombre_parcela, p.estadia_id_ref);
+                                                            }
+                                                        }}
+                                                        value=""
+                                                    >
+                                                        <option value="">Mover...</option>
+                                                        {getParcelasParaMudanza().map(dp => (
+                                                            <option key={dp.nombre_parcela} value={dp.nombre_parcela}>
+                                                                {dp.nombre_parcela} {dp.estado === 'ocupada' ? '*' : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                </div>
+
                 {/* Mapa Camping */}
                 <Card className="overflow-hidden">
                     <CardHeader className="bg-gray-50/50 pb-4">
@@ -662,9 +791,9 @@ export default function OcupacionPage() {
                                 if (!isNaN(id)) {
                                     // Tooltip: "Parcela X" + "\nNombre 1" + "\nNombre 2"
                                     let tooltip = `Parcela ${id}`;
-                                    if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
-                                        tooltip += '\n' + p.nombres_integrantes.join('\n');
-                                        tooltip += `\n(Total: ${p.nombres_integrantes.length})`; // Debug Count
+                                    if (p.estado === 'ocupada' && p.integrantes_data && p.integrantes_data.length > 0) {
+                                        tooltip += '\n' + p.integrantes_data.map((i: any) => i.nombre).join('\n');
+                                        tooltip += `\n(Total: ${p.integrantes_data.length})`; // Debug Count
                                     } else if (p.estado === 'ocupada') {
                                         tooltip += '\n(Sin nombres)';
                                     }
@@ -677,7 +806,7 @@ export default function OcupacionPage() {
                                 if (!parcela) return;
 
                                 if (parcela.estado === 'ocupada') {
-                                    if (!isReadOnly) setParcelaSeleccionada(parcela);
+                                    setParcelaSeleccionada(parcela); // Always open modal to view details/move
                                 } else if (parcela.estado === 'reservada') {
                                     handleLiberarReserva(parcela.nombre_parcela);
                                 } else {
