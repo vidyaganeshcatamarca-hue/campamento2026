@@ -728,8 +728,8 @@ export default function OcupacionPage() {
                     </Card>
                 )}
 
-                {/* Mobile: Lista Global de Ocupantes (Solo visible para movil + role apropiado) */}
-                <div className="md:hidden">
+                {/* Lista Global de Ocupantes (Visible siempre para facilitar gestión y visualización por Auditor) */}
+                <div>
                     <Card>
                         <CardHeader><CardTitle>Ocupantes en Parcelas</CardTitle></CardHeader>
                         <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
@@ -737,7 +737,13 @@ export default function OcupacionPage() {
                                 <div key={p.nombre_parcela} className="border-b pb-2 last:border-0">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="font-bold text-lg">{p.nombre_parcela}</span>
-                                        <span className="text-xs text-muted">{p.estadia_nombre}</span>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-xs text-muted">{p.estadia_nombre}</span>
+                                            {/* Badge for occupied/shared state */}
+                                            <Badge variant="outline" className={p.cantidad_integrantes && p.cantidad_integrantes > 1 ? "bg-orange-50 text-orange-700 border-orange-200" : ""}>
+                                                {p.cantidad_integrantes} Ocupantes
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <div className="pl-2 space-y-2">
                                         {p.integrantes_data?.map(integ => (
