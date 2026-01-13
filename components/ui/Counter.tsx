@@ -9,17 +9,18 @@ interface CounterProps {
     max?: number;
     label?: string;
     className?: string;
+    disabled?: boolean;
 }
 
-export function Counter({ value, onChange, min = 0, max, label, className }: CounterProps) {
+export function Counter({ value, onChange, min = 0, max, label, className, disabled }: CounterProps) {
     const handleIncrement = () => {
-        if (max === undefined || value < max) {
+        if (!disabled && (max === undefined || value < max)) {
             onChange(value + 1);
         }
     };
 
     const handleDecrement = () => {
-        if (value > min) {
+        if (!disabled && value > min) {
             onChange(value - 1);
         }
     };
@@ -31,10 +32,10 @@ export function Counter({ value, onChange, min = 0, max, label, className }: Cou
                     {label}
                 </span>
             )}
-            <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-1">
+            <div className={cn("flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-1", disabled && "opacity-50 cursor-not-allowed")}>
                 <button
                     onClick={handleDecrement}
-                    disabled={value <= min}
+                    disabled={disabled || value <= min}
                     className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Decrementar"
                 >
@@ -45,7 +46,7 @@ export function Counter({ value, onChange, min = 0, max, label, className }: Cou
                 </span>
                 <button
                     onClick={handleIncrement}
-                    disabled={max !== undefined && value >= max}
+                    disabled={disabled || (max !== undefined && value >= max)}
                     className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     aria-label="Incrementar"
                 >
