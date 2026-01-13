@@ -140,20 +140,36 @@ export default function OcupacionPage() {
                 let estadiaCorrespondiente;
 
                 if (parcela.estado === 'ocupada') {
-                    // Strategy A: Match by ID
+                    // Strategy A: Match by ID (Best)
                     if (parcela.estadia_id) {
                         estadiaCorrespondiente = estadiasData?.find((e: any) => e.id === parcela.estadia_id);
                     }
-                    // Strategy B: Match by Name
+
+                    // Strategy B: Match by Name (Fallback)
                     if (!estadiaCorrespondiente) {
-                        estadiaCorrespondiente = estadiasData?.find((e: any) =>
-                            e.parcela_asignada &&
-                            (e.parcela_asignada === parcela.nombre_parcela || e.parcela_asignada.includes(parcela.nombre_parcela))
-                        );
+                        estadiaCorrespondiente = estadiasData?.find((e: any) => {
+                            if (!e.parcela_asignada) return false;
+
+                            // Normalization for robust comparison
+                            const pAsignada = String(e.parcela_asignada).toLowerCase().trim();
+                            const pActual = String(parcela.nombre_parcela).toLowerCase().trim();
+
+                            // 1. Exact match
+                            if (pAsignada === pActual) return true;
+
+                            // 2. Comma separated list (e.g. "10, 11")
+                            const asignadas = pAsignada.split(',').map((s: string) => s.trim());
+                            if (asignadas.includes(pActual)) return true;
+
+                            return false;
+                        });
                     }
                 }
 
                 if (estadiaCorrespondiente) {
+                    // Get Names for this estadia
+                    const names = acampantesMap[estadiaCorrespondiente.id] || [];
+
                     return {
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
@@ -161,7 +177,7 @@ export default function OcupacionPage() {
                         fecha_egreso: estadiaCorrespondiente.fecha_egreso_programada,
                         estadia_id_ref: estadiaCorrespondiente.id,
                         cantidad_integrantes: parcela.cantidad_integrantes,
-                        nombres_integrantes: acampantesMap[estadiaCorrespondiente.id] || []
+                        nombres_integrantes: names.length > 0 ? names : ([estadiaCorrespondiente.celular_responsable]) // Fallback to phone if no names
                     };
                 } else {
                     return {
