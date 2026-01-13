@@ -151,42 +151,52 @@ export default function OcupacionPage() {
             // 3. Map Data in Memory
             console.log('[Ocupacion] Mapeando datos...');
             const parcelasConInfo: ParcelaConEstadia[] = (parcelasData || []).map((parcela: any) => {
-                let estadiaCorrespondiente;
+                let estadiasCorrespondientes: any[] = [];
 
                 if (parcela.estado === 'ocupada') {
-                    // Strategy A: Match by Name (Priority as per user request)
-                    // "De la tabla estadias, buscar parcela_asignada join parcelas (nombre)"
-                    estadiaCorrespondiente = estadiasData?.find((e: any) => {
+                    // Buscar TODAS las estadías coincidentes
+                    estadiasCorrespondientes = estadiasData?.filter((e: any) => {
                         if (!e.parcela_asignada) return false;
                         const pAsignada = String(e.parcela_asignada).toLowerCase().trim();
                         const pActual = String(parcela.nombre_parcela).toLowerCase().trim();
 
-                        // Exact match
+                        // Match exacto o en lista
                         if (pAsignada === pActual) return true;
 
-                        // Comma separated list match
                         const asignadas = pAsignada.split(',').map((s: string) => s.trim());
                         return asignadas.includes(pActual);
-                    });
+                    }) || [];
 
-                    // Strategy B: Match by ID (Fallback)
-                    if (!estadiaCorrespondiente && parcela.estadia_id) {
-                        estadiaCorrespondiente = estadiasData?.find((e: any) => e.id === parcela.estadia_id);
+                    // Fallback strategy B: ID match if empty
+                    if (estadiasCorrespondientes.length === 0 && parcela.estadia_id) {
+                        const match = estadiasData?.find((e: any) => e.id === parcela.estadia_id);
+                        if (match) estadiasCorrespondientes = [match];
                     }
                 }
 
-                if (estadiaCorrespondiente) {
-                    // Get Names for this estadia
-                    const names = acampantesMap[estadiaCorrespondiente.id] || [];
+                if (estadiasCorrespondientes.length > 0) {
+                    // Aggregate Names from ALL stays
+                    let allNames: string[] = [];
+                    estadiasCorrespondientes.forEach(est => {
+                        const names = acampantesMap[est.id] || [];
+                        if (names.length > 0) {
+                            allNames = [...allNames, ...names];
+                        } else {
+                            allNames.push(est.celular_responsable); // Fallback
+                        }
+                    });
+
+                    // Use first stay for reference (egreso/nombre principal) but show size of group
+                    const principal = estadiasCorrespondientes[0];
 
                     return {
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
-                        estadia_nombre: estadiaCorrespondiente.celular_responsable,
-                        fecha_egreso: estadiaCorrespondiente.fecha_egreso_programada,
-                        estadia_id_ref: estadiaCorrespondiente.id,
+                        estadia_nombre: principal.celular_responsable, // Main contact
+                        fecha_egreso: principal.fecha_egreso_programada,
+                        estadia_id_ref: principal.id,
                         cantidad_integrantes: parcela.cantidad_integrantes,
-                        nombres_integrantes: names.length > 0 ? names : ([estadiaCorrespondiente.celular_responsable]) // Fallback to phone if no names
+                        nombres_integrantes: allNames
                     };
                 } else {
                     return {
