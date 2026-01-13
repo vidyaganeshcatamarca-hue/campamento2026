@@ -140,29 +140,24 @@ export default function OcupacionPage() {
                 let estadiaCorrespondiente;
 
                 if (parcela.estado === 'ocupada') {
-                    // Strategy A: Match by ID (Best)
-                    if (parcela.estadia_id) {
+                    // Strategy A: Match by Name (Priority as per user request)
+                    // "De la tabla estadias, buscar parcela_asignada join parcelas (nombre)"
+                    estadiaCorrespondiente = estadiasData?.find((e: any) => {
+                        if (!e.parcela_asignada) return false;
+                        const pAsignada = String(e.parcela_asignada).toLowerCase().trim();
+                        const pActual = String(parcela.nombre_parcela).toLowerCase().trim();
+
+                        // Exact match
+                        if (pAsignada === pActual) return true;
+
+                        // Comma separated list match
+                        const asignadas = pAsignada.split(',').map((s: string) => s.trim());
+                        return asignadas.includes(pActual);
+                    });
+
+                    // Strategy B: Match by ID (Fallback)
+                    if (!estadiaCorrespondiente && parcela.estadia_id) {
                         estadiaCorrespondiente = estadiasData?.find((e: any) => e.id === parcela.estadia_id);
-                    }
-
-                    // Strategy B: Match by Name (Fallback)
-                    if (!estadiaCorrespondiente) {
-                        estadiaCorrespondiente = estadiasData?.find((e: any) => {
-                            if (!e.parcela_asignada) return false;
-
-                            // Normalization for robust comparison
-                            const pAsignada = String(e.parcela_asignada).toLowerCase().trim();
-                            const pActual = String(parcela.nombre_parcela).toLowerCase().trim();
-
-                            // 1. Exact match
-                            if (pAsignada === pActual) return true;
-
-                            // 2. Comma separated list (e.g. "10, 11")
-                            const asignadas = pAsignada.split(',').map((s: string) => s.trim());
-                            if (asignadas.includes(pActual)) return true;
-
-                            return false;
-                        });
                     }
                 }
 
@@ -628,6 +623,7 @@ export default function OcupacionPage() {
                                     let tooltip = `Parcela ${id}`;
                                     if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
                                         tooltip += '\n' + p.nombres_integrantes.join('\n');
+                                        tooltip += `\n(Total: ${p.nombres_integrantes.length})`; // Debug Count
                                     } else if (p.estado === 'ocupada') {
                                         tooltip += '\n(Sin nombres)';
                                     }
