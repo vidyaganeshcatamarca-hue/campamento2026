@@ -221,77 +221,80 @@ export default function LiquidacionPage() {
                 }
             }
 
-            // Si es pago grupal y SALDA TODO, confirmar a todos
+            // 4. Determinar Parcela Final (Antes de actualizar estadías)
+            const parcelasSeleccionadasStr = localStorage.getItem(`parcelas_${estadiaId}`);
+            let parcelaNombreFinal = vistaEstadia.parcela_asignada;
+            let parcelaIdSeleccionada: number | null = null;
+
+            if (parcelasSeleccionadasStr) {
+                const parcelasSeleccionadas = JSON.parse(parcelasSeleccionadasStr);
+                if (parcelasSeleccionadas.length > 0) {
+                    parcelaIdSeleccionada = parcelasSeleccionadas[0]; // Tomar la primera
+
+                    // Fetch parcela name
+                    const { data: parcela } = await supabase
+                        .from('parcelas')
+                        .select('nombre_parcela, cantidad_integrantes')
+                        .eq('id', parcelaIdSeleccionada)
+                        .single();
+
+                    if (parcela) {
+                        parcelaNombreFinal = parcela.nombre_parcela;
+                    }
+                }
+                localStorage.removeItem(`parcelas_${estadiaId}`);
+            }
+
+            // 5. Actualizar Estadías (Individual o Grupal)
             if (tipoCobro === 'grupal' && nuevoSaldo <= 0) {
+                // CASO GRUPAL: Confirmar a TODOS y asignar parcela a TODOS
                 for (const est of estadiasGrupo) {
                     await supabase
                         .from('estadias')
                         .update({
                             ingreso_confirmado: true,
-                            estado_estadia: 'activa'
+                            estado_estadia: 'activa',
+                            parcela_asignada: parcelaNombreFinal, // Assign to ALL members
+                            fecha_promesa_pago: null // Pagado completo
                         })
                         .eq('id', est.id);
                 }
-            }
 
-            // 4. Asignar parcela a la estadía e incrementar contador (solo individual)
-            const parcelasSeleccionadasStr = localStorage.getItem(`parcelas_${estadiaId}`);
-            let parcelaNombreFinal = vistaEstadia.parcela_asignada;
+                // Actualizar Ocupación de Parcela (Sumar TODO el grupo)
+                if (parcelaIdSeleccionada) {
+                    const { data: pData } = await supabase.from('parcelas').select('cantidad_integrantes').eq('id', parcelaIdSeleccionada).single();
+                    const current = pData?.cantidad_integrantes || 0;
+                    const groupSize = estadiasGrupo.length;
 
-            if (parcelasSeleccionadasStr) {
-                const parcelasSeleccionadas = JSON.parse(parcelasSeleccionadasStr);
-
-                if (parcelasSeleccionadas.length > 0) {
-                    const parcelaId = parcelasSeleccionadas[0]; // Tomar la primera parcela
-
-                    // Obtener datos de la parcela
-                    const { data: parcela, error: parcelaError } = await supabase
-                        .from('parcelas')
-                        .select('nombre_parcela, cantidad_integrantes')
-                        .eq('id', parcelaId)
-                        .single();
-
-                    if (parcelaError) throw parcelaError;
-
-                    parcelaNombreFinal = parcela.nombre_parcela; // Update for message
-
-                    // Asignar parcela a la estadía
-                    const { error: assignError } = await supabase
-                        .from('estadias')
-                        .update({
-                            parcela_asignada: parcela.nombre_parcela,
-                            ingreso_confirmado: true,
-                            estado_estadia: 'activa',
-                            fecha_promesa_pago: nuevoSaldo > 0 && fechaPromesa ? fechaPromesa : null
-                        })
-                        .eq('id', estadiaId);
-
-                    if (assignError) throw assignError;
-
-                    // Incrementar contador de integrantes en la parcela
-                    const nuevaCantidad = (parcela.cantidad_integrantes || 0) + 1;
-                    const { error: updateParcelaError } = await supabase
-                        .from('parcelas')
-                        .update({
-                            cantidad_integrantes: nuevaCantidad,
-                            estado: 'ocupada'
-                        })
-                        .eq('id', parcelaId);
-
-                    if (updateParcelaError) throw updateParcelaError;
+                    await supabase.from('parcelas')
+                        .update({ cantidad_integrantes: current + groupSize, estado: 'ocupada' })
+                        .eq('id', parcelaIdSeleccionada);
                 }
 
-                localStorage.removeItem(`parcelas_${estadiaId}`);
             } else {
-                // Si no hay parcela seleccionada, solo confirmar ingreso
+                // CASO INDIVIDUAL (O Grupal con deuda que solo confirma al pagador - aunque en grupal deberíamos confirmar a todos si parcialmente se paga?
+                // El usuario dijo "Ingresan los dos". Asumimos que si paga, entran.
+                // Mantendremos la lógica original para individual, pero usando parcelaNombreFinal
+
                 await supabase
                     .from('estadias')
                     .update({
                         ingreso_confirmado: true,
                         estado_estadia: 'activa',
+                        parcela_asignada: parcelaNombreFinal,
                         fecha_promesa_pago: nuevoSaldo > 0 && fechaPromesa ? fechaPromesa : null
                     })
                     .eq('id', estadiaId);
+
+                // Update Parcela count (+1)
+                if (parcelaIdSeleccionada) {
+                    const { data: pData } = await supabase.from('parcelas').select('cantidad_integrantes').eq('id', parcelaIdSeleccionada).single();
+                    const current = pData?.cantidad_integrantes || 0;
+
+                    await supabase.from('parcelas')
+                        .update({ cantidad_integrantes: current + 1, estado: 'ocupada' })
+                        .eq('id', parcelaIdSeleccionada);
+                }
             }
 
             // 5. Enviar Notificaciones WhatsApp (Secuencia Completa)
