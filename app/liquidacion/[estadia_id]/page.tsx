@@ -666,8 +666,12 @@ export default function LiquidacionPage() {
                             label="Descuento Especial ($)"
                             type="number"
                             value={descuentoEspecial}
-                            onChange={(e) => setDescuentoEspecial(e.target.value)}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/\./g, ''); // Remove dots
+                                if (/^\d*$/.test(val)) setDescuentoEspecial(val);
+                            }}
                             min={0}
+                            step={1}
                         />
 
                         {/* Total con descuento */}
@@ -684,10 +688,13 @@ export default function LiquidacionPage() {
                         <Input
                             label="Monto a Abonar ($) *"
                             type="number"
-                            value={montoAbonar} // Now string
-                            onChange={(e) => setMontoAbonar(e.target.value)} // Just update string
+                            value={montoAbonar}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/\./g, '');
+                                if (/^\d*$/.test(val)) setMontoAbonar(val);
+                            }}
                             min={0}
-                            step={0.01}
+                            step={1}
                             required
                         />
 

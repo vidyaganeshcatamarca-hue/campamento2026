@@ -88,7 +88,7 @@ export default function OcupacionPage() {
             console.log('[Ocupacion] Solicitando parcelas...');
             const parcelasPromise = supabase
                 .from('parcelas')
-                .select('nombre_parcela, estado, estadia_id')
+                .select('nombre_parcela, estado, estadia_id, cantidad_integrantes')
                 .order('nombre_parcela');
 
             const { data: parcelasData, error: errParcelas } = await Promise.race([
@@ -579,6 +579,14 @@ export default function OcupacionPage() {
                         <MapaParcelas
                             ocupadas={parcelas.filter(p => p.estado === 'ocupada').map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
                             reservadas={parcelas.filter(p => p.estado === 'reservada').map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                            detalles={parcelas.reduce((acc, p) => {
+                                const id = parseInt(p.nombre_parcela.replace(/\D/g, ''));
+                                if (!isNaN(id)) {
+                                    const integrantes = (p as any).cantidad_integrantes || 0;
+                                    acc[id] = `Parcela ${id}${p.estado === 'ocupada' ? `\nIntegrantes: ${integrantes}` : ''}\nEstado: ${p.estado}`;
+                                }
+                                return acc;
+                            }, {} as Record<number, string>)}
                             onSelect={(id) => {
                                 const parcela = parcelas.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
                                 if (!parcela) return;

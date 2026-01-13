@@ -415,10 +415,14 @@ export default function SaldoPage() {
                                 label="Monto a Abonar ($)"
                                 type="number"
                                 value={montoPago || ''}
-                                onChange={(e) => setMontoPago(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => {
+                                    // Bug Z Fix: Forzar enteros
+                                    const val = parseInt(e.target.value) || 0;
+                                    setMontoPago(Math.floor(val));
+                                }}
                                 min={0}
                                 max={saldoPendiente}
-                                step={0.01}
+                                step={1}
                             />
 
                             <div>

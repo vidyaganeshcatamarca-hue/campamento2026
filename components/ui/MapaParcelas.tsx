@@ -9,6 +9,7 @@ interface MapaParcelasProps {
     reservadas: number[];
     seleccionadas?: number[];
     onSelect?: (parcelaId: number) => void;
+    detalles?: Record<number, string>;
     className?: string;
 }
 
