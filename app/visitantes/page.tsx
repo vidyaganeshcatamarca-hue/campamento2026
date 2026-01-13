@@ -28,6 +28,7 @@ export default function VisitantesPage() {
     const [vehiculo, setVehiculo] = useState<'ninguno' | 'auto' | 'moto'>('ninguno');
     const [guardando, setGuardando] = useState(false);
     const [mensajeExito, setMensajeExito] = useState(false);
+    const [suggestions, setSuggestions] = useState<any[]>([]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -121,33 +122,67 @@ export default function VisitantesPage() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <Input
-                                label="Nombre y Apellido *"
-                                value={formData.nombre_completo}
-                                onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })}
-                                onBlur={async () => {
-                                    if (formData.nombre_completo && !formData.celular) {
-                                        try {
-                                            const { data } = await supabase
-                                                .from('acampantes')
-                                                .select('celular')
-                                                .ilike('nombre_completo', `%${formData.nombre_completo}%`)
-                                                .not('celular', 'is', null) // Solo si tiene celular
-                                                .limit(1)
-                                                .single();
 
-                                            if (data?.celular) {
-                                                setFormData(prev => ({ ...prev, celular: data.celular }));
-                                                // Optional: toast or minimal indicator? User didn't ask for it, just "que traiga".
-                                            }
-                                        } catch (e) {
-                                            // Ignore error (e.g. not found)
+                            {/* Autocomplete Name Input */}
+                            <div className="relative">
+                                <label className="block text-sm font-medium text-foreground mb-1">Nombre y Apellido *</label>
+                                <input
+                                    type="text"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={formData.nombre_completo}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setFormData({ ...formData, nombre_completo: val });
+
+                                        // Debounce search
+                                        if (val.length > 2) {
+                                            const timer = setTimeout(async () => {
+                                                const { data } = await supabase
+                                                    .from('acampantes')
+                                                    .select('nombre_completo, celular')
+                                                    .ilike('nombre_completo', `%${val}%`)
+                                                    .order('nombre_completo')
+                                                    .limit(10);
+
+                                                if (data) {
+                                                    // Filter unique names
+                                                    const unique = Array.from(new Map(data.map(item => [item.nombre_completo, item])).values());
+                                                    setSuggestions(unique as any[]);
+                                                }
+                                            }, 300);
+                                        } else {
+                                            setSuggestions([]);
                                         }
-                                    }
-                                }}
-                                required
-                                autoFocus
-                            />
+                                    }}
+                                    required
+                                    autoFocus
+                                    autoComplete="off"
+                                />
+                                {suggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                                        {suggestions.map((s, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm flex justify-between items-center"
+                                                onClick={() => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        nombre_completo: s.nombre_completo,
+                                                        celular: s.celular || prev.celular
+                                                    }));
+                                                    setSuggestions([]);
+                                                }}
+                                            >
+                                                <span className="font-medium">{s.nombre_completo}</span>
+                                                {s.celular && (
+                                                    <span className="text-xs text-gray-400">{s.celular}</span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             <Input
                                 label="WhatsApp / Celular"
