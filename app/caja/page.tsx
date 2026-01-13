@@ -36,7 +36,7 @@ export default function CajaPage() {
             // Total cobrado en el período
             const { data: pagosData } = await supabase
                 .from('pagos')
-                .select('monto_abonado, metodo_pago')
+                .select('monto_abonado, metodo_pago, estadia_id')
                 .gte('fecha_pago', fechaInicio)
                 .lte('fecha_pago', fechaFin);
 
