@@ -246,7 +246,8 @@ export default function OcupacionPage() {
             // Pero si la vista falla, falla solo esta parte.
             const { data: estadiasData } = await supabase
                 .from('estadias') // Cambiado a estadias para seguridad
-                .select('id, celular_responsable, fecha_egreso_programada, cant_personas_total') // Campos básicos
+                // FIX: Ensure 'parcela_asignada' is selected
+                .select('id, celular_responsable, fecha_egreso_programada, cant_personas_total, parcela_asignada')
                 .eq('estado_estadia', 'activa')
                 .eq('ingreso_confirmado', true) // Solo mostrar si ya ingresaron efectivamente
                 .gte('fecha_egreso_programada', fechaInicio)
@@ -255,11 +256,22 @@ export default function OcupacionPage() {
             const egresosInfo: EgresoInfo[] = [];
 
             for (const estadia of estadiasData || []) {
-                // Fetch Parcels
-                const { data: parcelasData } = await supabase
-                    .from('parcelas')
-                    .select('nombre_parcela')
-                    .eq('estadia_id', estadia.id);
+                // Fetch Parcels (Primary: String parsing, Secondary: DB Ref)
+                let nombresParcelas: string[] = [];
+
+                if (estadia.parcela_asignada) {
+                    nombresParcelas = estadia.parcela_asignada.split(',').map((s: string) => s.trim());
+                } else {
+                    // Fallback to table if string is empty (Legacy?)
+                    const { data: parcelasData } = await supabase
+                        .from('parcelas')
+                        .select('nombre_parcela')
+                        .eq('estadia_id', estadia.id);
+
+                    if (parcelasData) {
+                        nombresParcelas = parcelasData.map((p: any) => p.nombre_parcela);
+                    }
+                }
 
                 // Fetch Name
                 const { data: acampanteData } = await supabase
@@ -272,7 +284,7 @@ export default function OcupacionPage() {
                     responsable: estadia.celular_responsable,
                     nombre: acampanteData?.nombre_completo || 'Sin Nombre',
                     celular: estadia.celular_responsable,
-                    parcelas: parcelasData?.map((p: any) => p.nombre_parcela) || [],
+                    parcelas: nombresParcelas,
                     cant_personas: estadia.cant_personas_total || 0,
                     fecha_egreso: estadia.fecha_egreso_programada
                 });
