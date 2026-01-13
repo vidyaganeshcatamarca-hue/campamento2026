@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { DollarSign, CheckCircle, Send, MessageCircle } from 'lucide-react';
+import { DollarSign, CheckCircle, Send, MessageCircle, Eye } from 'lucide-react';
 import { formatCurrency, sendWhatsAppNotification, replaceTemplate } from '@/lib/utils';
 import { MJE_BIENVENIDA_PERSONAL, MJE_BIENVENIDA_GENERAL } from '@/lib/mensajes';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
+import Cookies from 'js-cookie';
 
 import { cargarAcampantes, cargarEstadiasActivas, reasignarAcampante, procesarPagoInicial } from './helpers';
 
@@ -39,7 +40,20 @@ export default function LiquidacionPage() {
     const [estadiasGrupo, setEstadiasGrupo] = useState<(VistaEstadiaConTotales & { responsable_nombre?: string })[]>([]);
     const [totalGrupal, setTotalGrupal] = useState(0);
 
+    // Auditor Role
+    const [role, setRole] = useState<string>('invitado');
+    const isAuditor = role === 'auditor';
+
     useEffect(() => {
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
         fetchData();
     }, [estadiaId]);
 
@@ -167,6 +181,7 @@ export default function LiquidacionPage() {
 
     const handleFinalizarIngreso = async () => {
         if (!vistaEstadia) return;
+        if (isAuditor) return;
 
         const montoNum = parseFloat(montoAbonar) || 0; // Parse string input
 
@@ -494,6 +509,11 @@ export default function LiquidacionPage() {
                     <p className="text-muted mt-1">
                         Resumen financiero y registro de pago inicial
                     </p>
+                    {isAuditor && (
+                        <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-semibold border border-amber-200 mt-2 inline-block">
+                            Modo Auditoría (Lectura)
+                        </div>
+                    )}
                 </div>
 
                 {/* Selector de Tipo de Cobro */}
@@ -510,6 +530,7 @@ export default function LiquidacionPage() {
                                     checked={tipoCobro === 'individual'}
                                     onChange={() => setTipoCobro('individual')}
                                     className="w-4 h-4 text-primary"
+                                    disabled={isAuditor}
                                 />
                                 <div>
                                     <span className="font-medium">Individual</span>
@@ -523,6 +544,7 @@ export default function LiquidacionPage() {
                                     checked={tipoCobro === 'grupal'}
                                     onChange={() => setTipoCobro('grupal')}
                                     className="w-4 h-4 text-primary"
+                                    disabled={isAuditor}
                                 />
                                 <div>
                                     <span className="font-medium">Grupal</span>
@@ -672,6 +694,7 @@ export default function LiquidacionPage() {
                             }}
                             min={0}
                             step={1}
+                            disabled={isAuditor}
                         />
 
                         {/* Total con descuento */}
@@ -696,6 +719,7 @@ export default function LiquidacionPage() {
                             min={0}
                             step={1}
                             required
+                            disabled={isAuditor}
                         />
 
                         {/* Método de pago */}
@@ -708,6 +732,7 @@ export default function LiquidacionPage() {
                                 onChange={(e) => setMetodoPago(e.target.value)}
                                 className="input"
                                 required
+                                disabled={isAuditor}
                             >
                                 <option value="Efectivo">Efectivo</option>
                                 <option value="Transferencia">Transferencia</option>
@@ -727,6 +752,7 @@ export default function LiquidacionPage() {
                                     value={fechaPromesa}
                                     onChange={(e) => setFechaPromesa(e.target.value)}
                                     min={new Date().toISOString().split('T')[0]}
+                                    disabled={isAuditor}
                                 />
                                 <p className="text-xs text-muted mt-1">
                                     No se enviarán recordatorios antes de esta fecha
@@ -756,15 +782,26 @@ export default function LiquidacionPage() {
                     >
                         Volver
                     </Button>
-                    <Button
-                        variant="primary"
-                        onClick={handleFinalizarIngreso}
-                        disabled={saving || montoNumRender < 0}
-                        className="flex-1 flex items-center justify-center gap-2"
-                    >
-                        <CheckCircle className="w-5 h-5" />
-                        {saving ? 'Procesando...' : 'Finalizar Ingreso y Enviar Comprobante'}
-                    </Button>
+                    {!isAuditor ? (
+                        <Button
+                            variant="primary"
+                            onClick={handleFinalizarIngreso}
+                            disabled={saving || montoNumRender < 0}
+                            className="flex-1 flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle className="w-5 h-5" />
+                            {saving ? 'Procesando...' : 'Finalizar Ingreso y Enviar Comprobante'}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="secondary"
+                            disabled
+                            className="flex-1 flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+                        >
+                            <Eye className="w-5 h-5" />
+                            Modo Solo Lectura
+                        </Button>
+                    )}
                 </div>
             </div>
         </Layout>

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Home, Calendar, LogOut, Users } from 'lucide-react';
 import { MapaParcelas } from '@/components/ui/MapaParcelas';
+import Cookies from 'js-cookie';
 
 interface ParcelaConEstadia {
     nombre_parcela: string;
@@ -38,6 +39,10 @@ export default function OcupacionPage() {
     const [disponiblesHoy, setDisponiblesHoy] = useState(0);
     const [ocupacionPromedio, setOcupacionPromedio] = useState(0);
 
+    // Role
+    const [role, setRole] = useState<string>('invitado');
+    const isReadOnly = role === 'auditor' || role === 'acomodacion';
+
     // Separar parcelas
     const parcelasCamping = parcelas.filter(p => !p.nombre_parcela.toLowerCase().includes('cama'));
     const camasHabitacion = parcelas.filter(p => p.nombre_parcela.toLowerCase().includes('cama'));
@@ -63,6 +68,15 @@ export default function OcupacionPage() {
         setFechaEgreso(hoy);
         setFechaDesde(hoy);
         setFechaHasta(hoy);
+
+        // Load Role
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) { console.error(e); }
+        }
 
         fetchData();
     }, []);
@@ -263,6 +277,7 @@ export default function OcupacionPage() {
     };
 
     const handleCambiarParcela = async () => {
+        if (isReadOnly) return;
         if (!parcelaSeleccionada || !nuevaParcelaId) return;
         setProcesandoCambio(true);
 
@@ -369,6 +384,7 @@ export default function OcupacionPage() {
     };
 
     const handleReservarParcela = async (nombre: string) => {
+        if (isReadOnly) return;
         if (!confirm(`¿Reservar parcela ${nombre}?`)) return;
         try {
             const { error } = await supabase
@@ -385,6 +401,7 @@ export default function OcupacionPage() {
     };
 
     const handleLiberarReserva = async (nombre: string) => {
+        if (isReadOnly) return;
         if (!confirm(`¿Liberar reserva de ${nombre}?`)) return;
         try {
             const { error } = await supabase
@@ -588,7 +605,9 @@ export default function OcupacionPage() {
                                         {cama.estado === 'ocupada' ? (
                                             <>
                                                 <p className="text-xs text-muted truncate">{cama.estadia_nombre}</p>
-                                                <Button variant="outline" size="xs" className="mt-2 w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>Mudar</Button>
+                                                {!isReadOnly && (
+                                                    <Button variant="outline" size="xs" className="mt-2 w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>Mudar</Button>
+                                                )}
                                             </>
                                         ) : (
                                             <p className="text-xs text-green-600 font-medium mt-1">Disponible</p>
@@ -636,7 +655,7 @@ export default function OcupacionPage() {
                                 if (!parcela) return;
 
                                 if (parcela.estado === 'ocupada') {
-                                    setParcelaSeleccionada(parcela);
+                                    if (!isReadOnly) setParcelaSeleccionada(parcela);
                                 } else if (parcela.estado === 'reservada') {
                                     handleLiberarReserva(parcela.nombre_parcela);
                                 } else {

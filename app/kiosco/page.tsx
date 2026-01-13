@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { ShoppingCart, Plus, Minus, Trash2, DollarSign } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, DollarSign, Shield } from 'lucide-react';
 import { formatCurrency, getNoonTimestamp } from '@/lib/utils';
 
 interface Producto {
@@ -26,6 +26,21 @@ interface ItemCarrito {
 export default function KioscoPage() {
     const [productos, setProductos] = useState<Producto[]>([]);
     const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
+    const [role, setRole] = useState<string>('invitado'); // Auth state
+
+    useEffect(() => {
+        // Load Role
+        const session = document.cookie.split('; ').find(row => row.startsWith('camp_session='));
+        if (session) {
+            try {
+                const val = session.split('=')[1];
+                const parsed = JSON.parse(decodeURIComponent(val));
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
+    }, []);
     const [loading, setLoading] = useState(true);
     const [procesando, setProcesando] = useState(false);
     const [mensajeExito, setMensajeExito] = useState(false);
@@ -192,7 +207,17 @@ export default function KioscoPage() {
                     </div>
                 )}
 
-                <div className="grid lg:grid-cols-3 gap-6">
+                <div className="grid lg:grid-cols-3 gap-6 relative">
+                    {/* Auditor Overlay */}
+                    {role === 'auditor' && (
+                        <div className="absolute inset-0 z-50 bg-white/50 flex items-center justify-center backdrop-blur-[1px]">
+                            <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200 text-center">
+                                <Shield className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                                <h3 className="text-xl font-bold text-gray-800">Modo Auditoría</h3>
+                                <p className="text-muted">La venta está deshabilitada en este modo.</p>
+                            </div>
+                        </div>
+                    )}
                     {/* Productos */}
                     <div className="lg:col-span-2">
                         <Card>

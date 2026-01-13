@@ -68,6 +68,10 @@ export function Layout({ children }: LayoutProps) {
                 return navigation.filter(i => ['Dashboard'].includes(i.name));
             case 'servicio':
                 return navigation.filter(i => ['Ocupación', 'Dashboard'].includes(i.name));
+            case 'auditor':
+                return navigation; // Full access to all menus
+            case 'acomodacion':
+                return navigation.filter(i => ['Ocupación'].includes(i.name));
             default:
                 return [];
         }

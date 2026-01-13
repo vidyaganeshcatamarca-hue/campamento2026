@@ -371,7 +371,7 @@ export default function DashboardPage() {
 
                                                 {/* Actions Grid */}
                                                 <div className="grid grid-cols-2 gap-px bg-gray-100 border-b border-gray-100">
-                                                    {role !== 'medico' && (
+                                                    {role !== 'medico' && role !== 'auditor' && (
                                                         <>
                                                             <button
                                                                 onClick={() => router.push(`/recursos/${item.estadia.id}`)}
@@ -473,7 +473,7 @@ export default function DashboardPage() {
                                                     )}
 
                                                     <div className="flex items-center gap-1">
-                                                        {role !== 'medico' && (
+                                                        {role !== 'medico' && role !== 'auditor' && (
                                                             <>
                                                                 <Button variant="ghost" size="icon" onClick={() => router.push(`/recursos/${item.estadia.id}`)} title="Recursos">
                                                                     <Sun className="w-4 h-4 text-orange-500" />

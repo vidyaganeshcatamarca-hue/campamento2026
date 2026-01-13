@@ -16,6 +16,7 @@ import { MJE_BIENVENIDA_PERSONAL, MJE_BIENVENIDA_GENERAL } from '@/lib/mensajes'
 import { differenceInDays } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/Dialog';
 import { toast } from 'sonner';
+import Cookies from 'js-cookie';
 
 interface ParcelaConInfo extends Parcela {
     responsable_nombre?: string;
@@ -37,11 +38,24 @@ export default function CheckInPage() {
     const [inputManual, setInputManual] = useState(''); // BUG K State
     const [showOcupadas, setShowOcupadas] = useState(false);
 
+    // Auditor Role
+    const [role, setRole] = useState<string>('invitado');
+    const isReadOnly = role === 'auditor' || role === 'acomodacion';
+
     // Bug P: Custom Dialog State
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [pendingParcela, setPendingParcela] = useState<ParcelaConInfo | null>(null);
 
     useEffect(() => {
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
         fetchData();
     }, [estadiaId]);
 
@@ -146,6 +160,7 @@ export default function CheckInPage() {
 
     const handleConfirmarIngreso = async () => {
         if (!estadia || !acampante) return;
+        if (isReadOnly) return;
 
         if (parcelasSeleccionadas.length === 0) {
             // Requires parcela selection
@@ -215,8 +230,8 @@ export default function CheckInPage() {
                 .update({
                     // NO marcar ingreso_confirmado aquí, se hace en liquidación
                     // ingreso_confirmado: se mantiene false hasta liquidación
-                    fecha_ingreso: estadia.fecha_ingreso,
-                    fecha_egreso_programada: estadia.fecha_egreso_programada,
+                    fecha_ingreso: fechaIngresoDate ? fechaIngresoDate.toISOString() : estadia.fecha_ingreso,
+                    fecha_egreso_programada: fechaEgresoDate ? fechaEgresoDate.toISOString() : estadia.fecha_egreso_programada,
                     // FIX: User confirmed column is 'acumulado_noches_persona', not 'cant_dias'.
                     // We must recalculate it: Days * People
                     acumulado_noches_persona: cantDiasFinal * (estadia.cant_personas_total || 1),
@@ -258,6 +273,7 @@ export default function CheckInPage() {
     };
 
     const toggleParcela = (parcelaId: number) => {
+        if (isReadOnly) return;
         setParcelasSeleccionadas(prev =>
             prev.includes(parcelaId)
                 ? prev.filter(id => id !== parcelaId)
@@ -297,6 +313,11 @@ export default function CheckInPage() {
                         Revisa y confirma los datos antes de oficializar el ingreso
                     </p>
                 </div>
+                {isReadOnly && (
+                    <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-semibold border border-amber-200">
+                        Modo Auditoría (Lectura)
+                    </div>
+                )}
 
                 {acampante.es_persona_riesgo && (
                     <Card className="border-2 border-danger">
@@ -327,11 +348,13 @@ export default function CheckInPage() {
                                 label="Nombre Completo"
                                 value={acampante.nombre_completo}
                                 onChange={(e) => setAcampante({ ...acampante, nombre_completo: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Celular / WhatsApp"
                                 value={acampante.celular}
                                 onChange={(e) => setAcampante({ ...acampante, celular: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <div className="flex items-center space-x-2 md:col-span-2 bg-secondary/10 p-3 rounded-lg border border-secondary/20">
                                 <input
@@ -350,37 +373,44 @@ export default function CheckInPage() {
                                 type="number"
                                 value={acampante.edad || ''}
                                 onChange={(e) => setAcampante({ ...acampante, edad: parseInt(e.target.value) || 0 })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Grupo Sanguíneo"
                                 value={acampante.grupo_sanguineo || ''}
                                 onChange={(e) => setAcampante({ ...acampante, grupo_sanguineo: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Obra Social"
                                 value={acampante.obra_social || ''}
                                 onChange={(e) => setAcampante({ ...acampante, obra_social: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Contacto de Emergencia"
                                 value={acampante.contacto_emergencia || ''}
                                 onChange={(e) => setAcampante({ ...acampante, contacto_emergencia: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Enfermedades"
                                 value={acampante.enfermedades || ''}
                                 onChange={(e) => setAcampante({ ...acampante, enfermedades: e.target.value })}
                                 className="md:col-span-2"
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Alergias"
                                 value={acampante.alergias || ''}
                                 onChange={(e) => setAcampante({ ...acampante, alergias: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 label="Medicación"
                                 value={acampante.medicacion || ''}
                                 onChange={(e) => setAcampante({ ...acampante, medicacion: e.target.value })}
+                                disabled={isReadOnly}
                             />
                         </div>
                     </CardContent>
@@ -398,12 +428,14 @@ export default function CheckInPage() {
                                 label="Fecha de Ingreso"
                                 value={estadia.fecha_ingreso ? new Date(estadia.fecha_ingreso).toISOString().split('T')[0] : ''}
                                 onChange={(e) => setEstadia({ ...estadia, fecha_ingreso: e.target.value })}
+                                disabled={isReadOnly}
                             />
                             <Input
                                 type="date"
                                 label="Fecha de Egreso"
                                 value={estadia.fecha_egreso_programada ? new Date(estadia.fecha_egreso_programada).toISOString().split('T')[0] : ''}
                                 onChange={(e) => setEstadia({ ...estadia, fecha_egreso_programada: e.target.value })}
+                                disabled={isReadOnly}
                             />
                         </div>
                         <Counter
@@ -411,24 +443,28 @@ export default function CheckInPage() {
                             value={estadia.cant_parcelas_total || 0}
                             onChange={(value) => setEstadia({ ...estadia, cant_parcelas_total: value })}
                             min={0}
+                            disabled={isReadOnly}
                         />
                         <Counter
                             label="Sillas"
                             value={estadia.cant_sillas_total || 0}
                             onChange={(value) => setEstadia({ ...estadia, cant_sillas_total: value })}
                             min={0}
+                            disabled={isReadOnly}
                         />
                         <Counter
                             label="Mesas"
                             value={estadia.cant_mesas_total || 0}
                             onChange={(value) => setEstadia({ ...estadia, cant_mesas_total: value })}
                             min={0}
+                            disabled={isReadOnly}
                         />
                         <Input
                             label="Tipo de Vehículo / Patente"
                             value={estadia.tipo_vehiculo || ''}
                             onChange={(e) => setEstadia({ ...estadia, tipo_vehiculo: e.target.value })}
                             placeholder="Ej: Auto ABC123"
+                            disabled={isReadOnly}
                         />
                     </CardContent>
                 </Card>
@@ -555,15 +591,26 @@ export default function CheckInPage() {
                     >
                         Volver
                     </Button>
-                    <Button
-                        variant="primary"
-                        onClick={handleConfirmarIngreso}
-                        disabled={saving || parcelasSeleccionadas.length === 0}
-                        className="flex-1 flex items-center justify-center gap-2"
-                    >
-                        <CheckCircle className="w-5 h-5" />
-                        {saving ? 'Confirmando...' : 'Confirmar Ingreso'}
-                    </Button>
+                    {!isReadOnly ? (
+                        <Button
+                            variant="primary"
+                            onClick={handleConfirmarIngreso}
+                            disabled={saving || parcelasSeleccionadas.length === 0}
+                            className="flex-1 flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle className="w-5 h-5" />
+                            {saving ? 'Confirmando...' : 'Confirmar Ingreso'}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="secondary"
+                            disabled
+                            className="flex-1 flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+                        >
+                            <Eye className="w-5 h-5" />
+                            Modo Solo Lectura
+                        </Button>
+                    )}
                 </div>
             </div>
 

@@ -39,6 +39,13 @@ export function middleware(request: NextRequest) {
         const path = request.nextUrl.pathname;
 
         // RULES
+        if (role === 'auditor') {
+            // Auditor has full read access to all routes.
+            // Explicitly allow, no redirects needed unless we want to block API writes (which are POSTs).
+            // For now, simple routing allow.
+            return NextResponse.next();
+        }
+
         if (role === 'kiosco') {
             // Kiosco ONLY access /kiosco and /kiosco-auditoria
             if (!path.startsWith('/kiosco')) {
@@ -63,6 +70,12 @@ export function middleware(request: NextRequest) {
 
         if (role === 'seguridad') {
             if (!path.startsWith('/ocupacion') && !path.startsWith('/visitantes')) {
+                return NextResponse.redirect(new URL('/ocupacion', request.url));
+            }
+        }
+
+        if (role === 'acomodacion') {
+            if (!path.startsWith('/ocupacion') && !path.startsWith('/checkin')) {
                 return NextResponse.redirect(new URL('/ocupacion', request.url));
             }
         }

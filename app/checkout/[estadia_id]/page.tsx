@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { ArrowLeft, CheckCircle, DollarSign, Calendar, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, DollarSign, Calendar, AlertTriangle, Eye } from 'lucide-react';
 import { formatCurrency, getNoonTimestamp, replaceTemplate, sendWhatsAppNotification } from '@/lib/utils';
 import { MJE_DESPEDIDA } from '@/lib/mensajes';
 import { enviarReciboPago } from '@/lib/whatsapp';
 import { toast } from 'sonner';
+import Cookies from 'js-cookie';
 
 export default function CheckoutPage() {
     const router = useRouter();
@@ -36,7 +37,20 @@ export default function CheckoutPage() {
     const [montoPago, setMontoPago] = useState(0);
     const [metodoPago, setMetodoPago] = useState('Efectivo');
 
+    // Auditor Role
+    const [role, setRole] = useState<string>('invitado');
+    const isAuditor = role === 'auditor';
+
     useEffect(() => {
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
         fetchData();
     }, [estadiaId]);
 
@@ -125,6 +139,7 @@ export default function CheckoutPage() {
 
     const handleCheckout = async () => {
         if (!estadia || !fechaSalidaReal) return;
+        if (isAuditor) return;
 
         const calc = calcularAjuste();
 
@@ -315,6 +330,11 @@ export default function CheckoutPage() {
                             {responsable.nombre_completo}
                         </p>
                     </div>
+                    {isAuditor && (
+                        <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-semibold border border-amber-200 ml-auto">
+                            Modo Auditoría (Lectura)
+                        </div>
+                    )}
                 </div>
 
                 {/* Resumen de Estadía */}
@@ -372,6 +392,7 @@ export default function CheckoutPage() {
                             onChange={(e) => setFechaSalidaReal(e.target.value)}
                             min={fechaMinima}
                             max={fechaHoy}
+                            disabled={isAuditor}
                         />
                         <p className="text-xs text-muted mt-2">
                             Por defecto es hoy. Modifica si salió otro día.
@@ -399,6 +420,7 @@ export default function CheckoutPage() {
                                         if (e.target.checked) setMontoManual(calc.ajuste);
                                     }}
                                     className="rounded border-gray-300 w-4 h-4 text-primary focus:ring-primary"
+                                    disabled={isAuditor}
                                 />
                                 Habilitar Ajuste Manual
                             </label>
@@ -414,6 +436,7 @@ export default function CheckoutPage() {
                                     type="number"
                                     value={montoManual}
                                     onChange={(e) => setMontoManual(parseFloat(e.target.value) || 0)}
+                                    disabled={isAuditor}
                                 />
                                 <div className="text-xs text-muted space-y-1">
                                     <p>• Valor <b>negativo</b> (ej: -5000): Devolución / Descuento (Reduce el total).</p>
@@ -484,6 +507,7 @@ export default function CheckoutPage() {
                                     onChange={(e) => setMontoPago(parseFloat(e.target.value) || 0)}
                                     min={0}
                                     step={0.01}
+                                    disabled={isAuditor}
                                 />
 
                                 <div>
@@ -494,6 +518,7 @@ export default function CheckoutPage() {
                                         value={metodoPago}
                                         onChange={(e) => setMetodoPago(e.target.value)}
                                         className="input"
+                                        disabled={isAuditor}
                                     >
                                         <option value="Efectivo">Efectivo</option>
                                         <option value="Transferencia">Transferencia</option>
@@ -523,15 +548,26 @@ export default function CheckoutPage() {
                     >
                         Cancelar
                     </Button>
-                    <Button
-                        variant="primary"
-                        onClick={handleCheckout}
-                        disabled={processing}
-                        className="flex-1"
-                    >
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        {processing ? 'Procesando...' : 'Confirmar Check-out'}
-                    </Button>
+                    {!isAuditor ? (
+                        <Button
+                            variant="primary"
+                            onClick={handleCheckout}
+                            disabled={processing}
+                            className="flex-1"
+                        >
+                            <CheckCircle className="w-5 h-5 mr-2" />
+                            {processing ? 'Procesando...' : 'Confirmar Check-out'}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="secondary"
+                            disabled
+                            className="flex-1 flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+                        >
+                            <Eye className="w-5 h-5" />
+                            Modo Solo Lectura
+                        </Button>
+                    )}
                 </div>
 
                 {/* Advertencia */}
