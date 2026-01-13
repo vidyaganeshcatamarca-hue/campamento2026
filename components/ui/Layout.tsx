@@ -65,7 +65,7 @@ export function Layout({ children }: LayoutProps) {
             case 'kiosco':
                 return navigation.filter(i => ['Kiosco', 'Auditoría Kiosco'].includes(i.name));
             case 'medico':
-                return navigation.filter(i => ['Dashboard', 'Visitantes'].includes(i.name));
+                return navigation.filter(i => ['Dashboard'].includes(i.name));
             case 'servicio':
                 return navigation.filter(i => ['Ocupación', 'Dashboard'].includes(i.name));
             default:

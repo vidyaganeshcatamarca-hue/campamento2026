@@ -48,18 +48,36 @@ export default function DashboardPage() {
             try {
                 const parsed = JSON.parse(session);
                 setRole(parsed.role || 'invitado');
+
+                // Medico: Force List View
+                if (parsed.role === 'medico') {
+                    setViewMode('list');
+                }
             } catch (e) {
                 console.error("Error parsing session", e);
             }
         }
 
         fetchData();
-        // Recuperar preferencia de vista
+        // Recuperar preferencia de vista (Solo si NO es médico)
         const savedView = localStorage.getItem('dashboardViewMode');
         if (savedView === 'list' || savedView === 'grid') {
-            setViewMode(savedView);
+            const session = Cookies.get('camp_session');
+            let isMedico = false;
+            if (session) {
+                try { isMedico = JSON.parse(session).role === 'medico'; } catch { }
+            }
+
+            if (!isMedico) {
+                setViewMode(savedView);
+            }
         }
-    }, []);
+    }, [role]);
+    // Actually, to keep it clean: logic above handles strict order.
+
+    // Simplification for reliability:
+    // We can rely on the setRole triggering a re-render or just set it based on cookie immediately.
+    // Let's stick to the previous effect but refine it.
 
     const toggleView = (mode: 'grid' | 'list') => {
         setViewMode(mode);

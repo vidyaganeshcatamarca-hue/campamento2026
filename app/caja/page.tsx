@@ -111,6 +111,51 @@ export default function CajaPage() {
         };
     };
 
+    const handleExport = () => {
+        // 1. Prepare CSV Content
+        const rows = [
+            ['Reporte de Caja', `Generado el: ${new Date().toLocaleString()}`],
+            [''],
+            ['Resumen Financiero'],
+            ['Concepto', 'Monto'],
+            ['Total Cobrado (Camping)', totalCobrado],
+            ['Total Kiosco', totalKiosco],
+            ['Total General', totalCobrado + totalKiosco],
+            ['Total Adeudado', totalAdeudado],
+            [''],
+            ['Desglose por Metodo de Pago'],
+            ['Metodo', 'Monto']
+        ];
+
+        // Add Payment Methods
+        Object.entries(pagosPorMetodo).forEach(([metodo, monto]) => {
+            rows.push([metodo, monto]);
+        });
+
+        rows.push(['']);
+        rows.push(['Ventas Kiosco']);
+        rows.push(['Producto', 'Cantidad', 'Total']);
+
+        // Add Kiosk Sales
+        ventasKiosco.forEach(v => {
+            rows.push([v.producto, v.cantidad_vendida, v.total_ventas]);
+        });
+
+        // 2. Convert to CSV String
+        const csvContent = rows.map(e => e.join(",")).join("\n");
+
+        // 3. Trigger Download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `cierre_caja_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (loading) {
         return (
             <Layout>
@@ -300,9 +345,9 @@ export default function CajaPage() {
                 </Card>
 
                 {/* Botón Exportar */}
-                <Button variant="outline" className="w-full md:w-auto">
+                <Button variant="outline" className="w-full md:w-auto" onClick={handleExport}>
                     <Download className="w-5 h-5 mr-2" />
-                    Exportar Reporte (Próximamente)
+                    Exportar Reporte (CSV)
                 </Button>
             </div>
         </Layout>
