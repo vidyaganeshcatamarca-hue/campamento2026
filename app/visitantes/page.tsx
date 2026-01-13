@@ -125,6 +125,26 @@ export default function VisitantesPage() {
                                 label="Nombre y Apellido *"
                                 value={formData.nombre_completo}
                                 onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })}
+                                onBlur={async () => {
+                                    if (formData.nombre_completo && !formData.celular) {
+                                        try {
+                                            const { data } = await supabase
+                                                .from('acampantes')
+                                                .select('celular')
+                                                .ilike('nombre_completo', `%${formData.nombre_completo}%`)
+                                                .not('celular', 'is', null) // Solo si tiene celular
+                                                .limit(1)
+                                                .single();
+
+                                            if (data?.celular) {
+                                                setFormData(prev => ({ ...prev, celular: data.celular }));
+                                                // Optional: toast or minimal indicator? User didn't ask for it, just "que traiga".
+                                            }
+                                        } catch (e) {
+                                            // Ignore error (e.g. not found)
+                                        }
+                                    }
+                                }}
                                 required
                                 autoFocus
                             />

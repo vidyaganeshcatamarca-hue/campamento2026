@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { EditCamperModal } from '@/components/EditCamperModal';
-import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal } from 'lucide-react';
+import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +26,7 @@ export default function DashboardPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRiesgo, setFilterRiesgo] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [overdueStays, setOverdueStays] = useState<VistaEstadiaConTotales[]>([]);
 
     // Estado para edición
     const [editingPersona, setEditingPersona] = useState<Acampante | null>(null);
@@ -103,6 +104,20 @@ export default function DashboardPage() {
                 ocupacionParcelas: ocupacion
             });
 
+            // Feat W: Check for overdue stays
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Midnight local
+
+            const expired = estadias?.filter(e => {
+                // Parse date safely (assuming YYYY-MM-DD)
+                if (!e.fecha_egreso_programada) return false;
+                // Add T12:00:00 to ensure we compare against noon of that day (avoiding timezone shift)
+                const egressDate = new Date(`${e.fecha_egreso_programada}T12:00:00`);
+                return egressDate < today; // If egress was yesterday (or before), it's overdue
+            }) || [];
+
+            setOverdueStays(expired);
+
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
         } finally {
@@ -131,6 +146,19 @@ export default function DashboardPage() {
     return (
         <Layout>
             <div className="space-y-6">
+
+                {/* Overdue Alert Banner (Feat W) */}
+                {overdueStays.length > 0 && (
+                    <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-4 rounded-r shadow-sm animate-pulse-slow">
+                        <div className="flex items-center gap-3">
+                            <Clock className="w-6 h-6 text-amber-600" />
+                            <div>
+                                <p className="font-bold text-lg">¡Atención!</p>
+                                <p>Hay <span className="font-bold text-amber-700">{overdueStays.length} estadía(s) vencida(s)</span> que requieren Check-out inmediato.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Header & Stats Banner */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -248,13 +276,14 @@ export default function DashboardPage() {
                                     const hasDebt = item.estadia.saldo_pendiente > 0;
                                     const isRisk = item.persona.es_persona_riesgo;
                                     const isResponsible = item.persona.es_responsable_pago;
+                                    const isOverdue = overdueStays.some(o => o.id === item.estadia.id);
 
                                     return (
                                         <Card
                                             key={item.persona.id || idx}
                                             className={cn(
                                                 "hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden border-t-4",
-                                                isRisk ? "border-t-red-500" : "border-t-primary"
+                                                isOverdue ? "border-t-amber-500 bg-amber-50" : (isRisk ? "border-t-red-500" : "border-t-primary")
                                             )}
                                             onClick={(e) => handleCardClick(e, item.persona)}
                                         >
@@ -286,6 +315,12 @@ export default function DashboardPage() {
                                                                 <AlertTriangle className="w-3 h-3 mr-1" /> Riesgo
                                                             </Badge>
                                                         ) : <span></span>}
+
+                                                        {isOverdue && (
+                                                            <Badge variant="warning" className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 border-amber-200">
+                                                                <Clock className="w-3 h-3 mr-1" /> Vencida
+                                                            </Badge>
+                                                        )}
 
                                                         {hasDebt && isResponsible && (
                                                             <span className="text-sm font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
@@ -356,6 +391,7 @@ export default function DashboardPage() {
                                         const hasDebt = item.estadia.saldo_pendiente > 0;
                                         const isRisk = item.persona.es_persona_riesgo;
                                         const isResponsible = item.persona.es_responsable_pago;
+                                        const isOverdue = overdueStays.some(o => o.id === item.estadia.id);
 
                                         return (
                                             <div
@@ -377,6 +413,7 @@ export default function DashboardPage() {
                                                         <div className="flex items-center gap-2">
                                                             <h4 className="font-bold text-gray-900">{item.persona.nombre_completo}</h4>
                                                             {isRisk && <Badge variant="danger" className="text-[9px] px-1 py-0">RIESGO</Badge>}
+                                                            {isOverdue && <Badge variant="warning" className="text-[9px] px-1 py-0 bg-amber-100 text-amber-800">VENCIDA</Badge>}
                                                         </div>
                                                         <div className="flex items-center gap-3 text-sm text-gray-500">
                                                             <span className="flex items-center gap-1"><Tent className="w-3 h-3" /> {item.estadia.parcela_asignada ? `Parcela: ${item.estadia.parcela_asignada}` : 'Sin parcela'}</span>

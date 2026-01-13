@@ -149,10 +149,10 @@ export function Layout({ children }: LayoutProps) {
                 </main>
             </div>
 
-            {/* Mobile Bottom Navigation */}
+            {/* Mobile Bottom Navigation - Horizontal Scroll */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-                <div className="grid grid-cols-4 gap-1 p-2">
-                    {filteredNavigation.slice(0, 4).map((item) => {
+                <div className="flex overflow-x-auto p-2 gap-2 no-scrollbar">
+                    {filteredNavigation.map((item) => {
                         const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                         const Icon = item.icon;
 
@@ -161,17 +161,26 @@ export function Layout({ children }: LayoutProps) {
                                 key={item.name}
                                 href={item.href}
                                 className={cn(
-                                    'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors',
+                                    'flex flex-col items-center justify-center min-w-[70px] px-2 py-2 rounded-lg transition-colors shrink-0',
                                     isActive
                                         ? 'bg-primary text-white'
-                                        : 'text-muted'
+                                        : 'text-muted hover:bg-gray-50'
                                 )}
                             >
-                                <Icon className="w-5 h-5" />
-                                <span className="text-xs font-medium">{item.name}</span>
+                                <Icon className="w-5 h-5 mb-1" />
+                                <span className="text-[10px] font-medium leading-none text-center truncate w-full">{item.name}</span>
                             </Link>
                         );
                     })}
+
+                    {/* Mobile Logout */}
+                    <button
+                        onClick={handleLogout}
+                        className="flex flex-col items-center justify-center min-w-[70px] px-2 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                    >
+                        <LogOut className="w-5 h-5 mb-1" />
+                        <span className="text-[10px] font-medium leading-none text-center">Salir</span>
+                    </button>
                 </div>
             </nav>
         </div>

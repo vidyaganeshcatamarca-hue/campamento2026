@@ -181,10 +181,22 @@ export default function CheckInPage() {
             // 2. Actualizar estadía (sin confirmar ingreso todavía)
             // El ingreso se confirmará en liquidación al finalizar pago
 
-            // Bug F: Calcular cantidad de noches (días) para asegurar recálculo en liquidación
-            // Robust Date Parsing to prevent crash (Bug T)
-            const fechaIngresoDate = estadia.fecha_ingreso ? new Date(estadia.fecha_ingreso) : new Date();
-            const fechaEgresoDate = estadia.fecha_egreso_programada ? new Date(estadia.fecha_egreso_programada) : new Date();
+            // Bug F & V: Calcular cantidad de noches (días)
+            // Fix: Normalizar a mediodía para evitar problemas de timezone (off-by-one)
+            // Si la fecha viene como YYYY-MM-DD, al hacer new Date() puede ser UTC 00:00 que en local es día anterior.
+            // Solución: Parsear string manualmente o agregar hora.
+
+            const parseDateToNoon = (dateStr: string | undefined): Date | null => {
+                if (!dateStr) return null;
+                // Asumimos dateStr es YYYY-MM-DD. Agregamos T12:00:00 para garantizar mediodía local.
+                try {
+                    const cleanDate = dateStr.split('T')[0];
+                    return new Date(`${cleanDate}T12:00:00`);
+                } catch { return null; }
+            };
+
+            const fechaIngresoDate = parseDateToNoon(estadia.fecha_ingreso) || new Date();
+            const fechaEgresoDate = parseDateToNoon(estadia.fecha_egreso_programada) || new Date();
 
             let diasCalculados = 1;
             try {
@@ -195,7 +207,8 @@ export default function CheckInPage() {
                 console.warn('Error calculando días:', e);
             }
 
-            const cantDiasFinal = diasCalculados > 0 ? diasCalculados : 1; // Mínimo 1 noche
+            // Si son el mismo día o anterior, cobrar 1 noche mínima
+            const cantDiasFinal = Math.max(1, diasCalculados);
 
             const { error: estadiaError } = await supabase
                 .from('estadias')
@@ -204,7 +217,9 @@ export default function CheckInPage() {
                     // ingreso_confirmado: se mantiene false hasta liquidación
                     fecha_ingreso: estadia.fecha_ingreso,
                     fecha_egreso_programada: estadia.fecha_egreso_programada,
-                    // cant_dias: cantDiasFinal, // REMOVED: Column likely doesn't exist. View should calculate from dates.
+                    // FIX: User confirmed column is 'acumulado_noches_persona', not 'cant_dias'.
+                    // We must recalculate it: Days * People
+                    acumulado_noches_persona: cantDiasFinal * (estadia.cant_personas_total || 1),
                     cant_parcelas_total: estadia.cant_parcelas_total,
                     cant_sillas_total: estadia.cant_sillas_total,
                     cant_mesas_total: estadia.cant_mesas_total,
