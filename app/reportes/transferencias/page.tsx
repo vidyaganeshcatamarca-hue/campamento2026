@@ -40,7 +40,7 @@ export default function ReporteTransferenciasPage() {
 
             const { data: pagosData, error: pagosError } = await supabase
                 .from('pagos')
-                .select('*')
+                .select('*') // Includes recibo_emitido
                 .eq('metodo_pago', 'Transferencia')
                 .gte('fecha_pago', desde)
                 .lte('fecha_pago', hasta)
@@ -76,7 +76,8 @@ export default function ReporteTransferenciasPage() {
                     ...pago,
                     responsable_nombre: nombre,
                     responsable_dni: dni,
-                    responsable_celular: celular
+                    responsable_celular: celular,
+                    recibo_emitido: pago.recibo_emitido || false // Default false
                 };
             }));
 
@@ -87,6 +88,29 @@ export default function ReporteTransferenciasPage() {
             toast.error('Error al cargar los pagos');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggleRecibo = async (id: number, current: boolean) => {
+        // Optimistic UI update
+        const updatedPagos = pagos.map(p =>
+            p.id === id ? { ...p, recibo_emitido: !current } : p
+        );
+        setPagos(updatedPagos);
+
+        try {
+            const { error } = await supabase
+                .from('pagos')
+                .update({ recibo_emitido: !current })
+                .eq('id', id);
+
+            if (error) throw error;
+            toast.success('Estado actualizado');
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al actualizar estado');
+            // Revert on error
+            setPagos(pagos);
         }
     };
 
@@ -186,6 +210,7 @@ export default function ReporteTransferenciasPage() {
                                     <th className="px-4 py-3">DNI</th>
                                     <th className="px-4 py-3">Celular</th>
                                     <th className="px-4 py-3 text-right">Monto</th>
+                                    <th className="px-4 py-3 text-center">Recibo Manual</th>
                                     <th className="px-4 py-3 text-center">ID</th>
                                 </tr>
                             </thead>
@@ -212,6 +237,14 @@ export default function ReporteTransferenciasPage() {
                                             <td className="px-4 py-3 text-muted">{pago.responsable_celular}</td>
                                             <td className="px-4 py-3 text-right font-semibold text-green-700">
                                                 {formatCurrency(pago.monto_abonado)}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={pago.recibo_emitido || false}
+                                                    onChange={() => handleToggleRecibo(pago.id, pago.recibo_emitido)}
+                                                    className="w-5 h-5 cursor-pointer accent-primary"
+                                                />
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <Badge variant="outline" className="text-[10px] bg-gray-50 text-muted">
