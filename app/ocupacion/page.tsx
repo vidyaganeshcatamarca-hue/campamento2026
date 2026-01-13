@@ -16,6 +16,7 @@ interface ParcelaConEstadia {
     estadia_nombre?: string;
     fecha_egreso?: string;
     estadia_id_ref?: string; // ID de la estadía para mudanzas
+    cantidad_integrantes?: number;
 }
 
 interface EgresoInfo {
@@ -137,13 +138,15 @@ export default function OcupacionPage() {
                         estado: parcela.estado || 'libre',
                         estadia_nombre: estadiaCorrespondiente.celular_responsable,
                         fecha_egreso: estadiaCorrespondiente.fecha_egreso_programada,
-                        estadia_id_ref: estadiaCorrespondiente.id
+                        estadia_id_ref: estadiaCorrespondiente.id,
+                        cantidad_integrantes: parcela.cantidad_integrantes
                     };
                 } else {
                     return {
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
-                        estadia_nombre: parcela.estado === 'ocupada' ? 'Ocupada' : undefined
+                        estadia_nombre: parcela.estado === 'ocupada' ? 'Ocupada' : undefined,
+                        cantidad_integrantes: parcela.cantidad_integrantes
                     };
                 }
             });
@@ -582,8 +585,8 @@ export default function OcupacionPage() {
                             detalles={parcelas.reduce((acc, p) => {
                                 const id = parseInt(p.nombre_parcela.replace(/\D/g, ''));
                                 if (!isNaN(id)) {
-                                    const integrantes = (p as any).cantidad_integrantes || 0;
-                                    acc[id] = `Parcela ${id}${p.estado === 'ocupada' ? `\nIntegrantes: ${integrantes}` : ''}\nEstado: ${p.estado}`;
+                                    const integrantes = p.cantidad_integrantes || 0;
+                                    acc[id] = `Parcela ${id}${p.estado === 'ocupada' ? `\nIntegrantes: ${integrantes}` : ''}`;
                                 }
                                 return acc;
                             }, {} as Record<number, string>)}
