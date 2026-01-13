@@ -15,8 +15,9 @@ interface ParcelaConEstadia {
     estado: string;
     estadia_nombre?: string;
     fecha_egreso?: string;
-    estadia_id_ref?: string; // ID de la estadía para mudanzas
+    estadia_id_ref?: string;
     cantidad_integrantes?: number;
+    nombres_integrantes?: string[]; // Array of names
 }
 
 interface EgresoInfo {
@@ -113,6 +114,26 @@ export default function OcupacionPage() {
 
             if (errEstadias) throw new Error(`Error cargando estadías: ${errEstadias.message}`);
 
+            // 2.5 Fetch Acampantes for Active Estadias
+            // We need this to show names in tooltip
+            const activeIds = estadiasData?.map((e: any) => e.id) || [];
+            let acampantesMap: Record<string, string[]> = {};
+
+            if (activeIds.length > 0) {
+                const { data: acampantesData } = await supabase
+                    .from('acampantes')
+                    .select('estadia_id, nombre_completo')
+                    .in('estadia_id', activeIds);
+
+                // Group by estadia_id
+                if (acampantesData) {
+                    acampantesData.forEach((a: any) => {
+                        if (!acampantesMap[a.estadia_id]) acampantesMap[a.estadia_id] = [];
+                        acampantesMap[a.estadia_id].push(a.nombre_completo);
+                    });
+                }
+            }
+
             // 3. Map Data in Memory
             console.log('[Ocupacion] Mapeando datos...');
             const parcelasConInfo: ParcelaConEstadia[] = (parcelasData || []).map((parcela: any) => {
@@ -139,14 +160,16 @@ export default function OcupacionPage() {
                         estadia_nombre: estadiaCorrespondiente.celular_responsable,
                         fecha_egreso: estadiaCorrespondiente.fecha_egreso_programada,
                         estadia_id_ref: estadiaCorrespondiente.id,
-                        cantidad_integrantes: parcela.cantidad_integrantes
+                        cantidad_integrantes: parcela.cantidad_integrantes,
+                        nombres_integrantes: acampantesMap[estadiaCorrespondiente.id] || []
                     };
                 } else {
                     return {
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
                         estadia_nombre: parcela.estado === 'ocupada' ? 'Ocupada' : undefined,
-                        cantidad_integrantes: parcela.cantidad_integrantes
+                        cantidad_integrantes: parcela.cantidad_integrantes,
+                        nombres_integrantes: []
                     };
                 }
             });
@@ -585,8 +608,12 @@ export default function OcupacionPage() {
                             detalles={parcelas.reduce((acc, p) => {
                                 const id = parseInt(p.nombre_parcela.replace(/\D/g, ''));
                                 if (!isNaN(id)) {
-                                    const integrantes = p.cantidad_integrantes || 0;
-                                    acc[id] = `Parcela ${id}${p.estado === 'ocupada' ? `\nIntegrantes: ${integrantes}` : ''}`;
+                                    // Tooltip: "Parcela X" + "\nNombre 1" + "\nNombre 2"
+                                    let tooltip = `Parcela ${id}`;
+                                    if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
+                                        tooltip += '\n' + p.nombres_integrantes.join('\n');
+                                    }
+                                    acc[id] = tooltip;
                                 }
                                 return acc;
                             }, {} as Record<number, string>)}

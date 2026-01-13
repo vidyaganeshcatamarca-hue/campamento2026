@@ -138,10 +138,10 @@ export default function VisitantesPage() {
                                         if (val.length > 2) {
                                             const timer = setTimeout(async () => {
                                                 const { data } = await supabase
-                                                    .from('acampantes')
+                                                    .from('visitas_diarias')
                                                     .select('nombre_completo, celular')
                                                     .ilike('nombre_completo', `%${val}%`)
-                                                    .order('nombre_completo')
+                                                    .order('nombre_completo', { ascending: true }) // Explicit order
                                                     .limit(10);
 
                                                 if (data) {

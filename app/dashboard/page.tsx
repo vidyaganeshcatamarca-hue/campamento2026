@@ -12,6 +12,7 @@ import { EditCamperModal } from '@/components/EditCamperModal';
 import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import Cookies from 'js-cookie';
 
 // Combined type for the dashboard view
 interface DashboardItem {
@@ -27,6 +28,7 @@ export default function DashboardPage() {
     const [filterRiesgo, setFilterRiesgo] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [overdueStays, setOverdueStays] = useState<VistaEstadiaConTotales[]>([]);
+    const [role, setRole] = useState<string>('invitado');
 
     // Estado para edición
     const [editingPersona, setEditingPersona] = useState<Acampante | null>(null);
@@ -40,6 +42,17 @@ export default function DashboardPage() {
     });
 
     useEffect(() => {
+        // Load Role
+        const session = Cookies.get('camp_session');
+        if (session) {
+            try {
+                const parsed = JSON.parse(session);
+                setRole(parsed.role || 'invitado');
+            } catch (e) {
+                console.error("Error parsing session", e);
+            }
+        }
+
         fetchData();
         // Recuperar preferencia de vista
         const savedView = localStorage.getItem('dashboardViewMode');
@@ -340,34 +353,38 @@ export default function DashboardPage() {
 
                                                 {/* Actions Grid */}
                                                 <div className="grid grid-cols-2 gap-px bg-gray-100 border-b border-gray-100">
-                                                    <button
-                                                        onClick={() => router.push(`/recursos/${item.estadia.id}`)}
-                                                        className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-orange-50 transition-colors group/btn"
-                                                    >
-                                                        <Sun className="w-5 h-5 text-orange-500" />
-                                                        <span className="font-semibold text-gray-700 group-hover/btn:text-orange-700">RECURSOS</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => router.push(`/extension/${item.estadia.id}`)}
-                                                        className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-blue-50 transition-colors group/btn"
-                                                    >
-                                                        <CalendarPlus className="w-5 h-5 text-blue-500" />
-                                                        <span className="font-semibold text-gray-700 group-hover/btn:text-blue-700">EXTENDER</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => router.push(`/saldo/${item.estadia.id}`)}
-                                                        className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-green-50 transition-colors group/btn"
-                                                    >
-                                                        <Wallet className="w-5 h-5 text-green-600" />
-                                                        <span className="font-semibold text-gray-700 group-hover/btn:text-green-700">SALDO</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => router.push(`/checkout/${item.estadia.id}`)}
-                                                        className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-red-50 transition-colors group/btn"
-                                                    >
-                                                        <CheckCircle className="w-5 h-5 text-red-600" />
-                                                        <span className="font-semibold text-gray-700 group-hover/btn:text-red-700">CHECK OUT</span>
-                                                    </button>
+                                                    {role !== 'medico' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => router.push(`/recursos/${item.estadia.id}`)}
+                                                                className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-orange-50 transition-colors group/btn"
+                                                            >
+                                                                <Sun className="w-5 h-5 text-orange-500" />
+                                                                <span className="font-semibold text-gray-700 group-hover/btn:text-orange-700">RECURSOS</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => router.push(`/extension/${item.estadia.id}`)}
+                                                                className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-blue-50 transition-colors group/btn"
+                                                            >
+                                                                <CalendarPlus className="w-5 h-5 text-blue-500" />
+                                                                <span className="font-semibold text-gray-700 group-hover/btn:text-blue-700">EXTENDER</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => router.push(`/saldo/${item.estadia.id}`)}
+                                                                className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-green-50 transition-colors group/btn"
+                                                            >
+                                                                <Wallet className="w-5 h-5 text-green-600" />
+                                                                <span className="font-semibold text-gray-700 group-hover/btn:text-green-700">SALDO</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => router.push(`/checkout/${item.estadia.id}`)}
+                                                                className="flex items-center justify-center gap-2 py-4 bg-white hover:bg-red-50 transition-colors group/btn"
+                                                            >
+                                                                <CheckCircle className="w-5 h-5 text-red-600" />
+                                                                <span className="font-semibold text-gray-700 group-hover/btn:text-red-700">CHECK OUT</span>
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
 
                                                 {/* Hover Overlay */}
@@ -438,18 +455,22 @@ export default function DashboardPage() {
                                                     )}
 
                                                     <div className="flex items-center gap-1">
-                                                        <Button variant="ghost" size="icon" onClick={() => router.push(`/recursos/${item.estadia.id}`)} title="Recursos">
-                                                            <Sun className="w-4 h-4 text-orange-500" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => router.push(`/extension/${item.estadia.id}`)} title="Extender">
-                                                            <CalendarPlus className="w-4 h-4 text-blue-500" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => router.push(`/saldo/${item.estadia.id}`)} title="Saldo">
-                                                            <Wallet className="w-4 h-4 text-green-600" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" onClick={() => router.push(`/checkout/${item.estadia.id}`)} title="Check Out">
-                                                            <CheckCircle className="w-4 h-4 text-red-600" />
-                                                        </Button>
+                                                        {role !== 'medico' && (
+                                                            <>
+                                                                <Button variant="ghost" size="icon" onClick={() => router.push(`/recursos/${item.estadia.id}`)} title="Recursos">
+                                                                    <Sun className="w-4 h-4 text-orange-500" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => router.push(`/extension/${item.estadia.id}`)} title="Extender">
+                                                                    <CalendarPlus className="w-4 h-4 text-blue-500" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => router.push(`/saldo/${item.estadia.id}`)} title="Saldo">
+                                                                    <Wallet className="w-4 h-4 text-green-600" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => router.push(`/checkout/${item.estadia.id}`)} title="Check Out">
+                                                                    <CheckCircle className="w-4 h-4 text-red-600" />
+                                                                </Button>
+                                                            </>
+                                                        )}
                                                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingPersona(item.persona); }}>
                                                             <MoreHorizontal className="w-4 h-4 text-gray-400" />
                                                         </Button>
