@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ArrowLeft, DollarSign, Receipt, CreditCard } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { differenceInDays } from 'date-fns';
 
 export default function SaldoPage() {
     const router = useRouter();
@@ -182,11 +183,29 @@ export default function SaldoPage() {
     const saldoPendiente = totalFinal - totalPagado;
 
     // A efectos de desglose visual individual (se mantiene para mostrar detalle de ESTA estadía)
+
+    // Helper para fechas (mismo fix que en Liquidación)
+    const getNoonDate = (dateStr: string | undefined | null): Date => {
+        if (!dateStr) return new Date();
+        try {
+            const cleanDate = dateStr.split('T')[0];
+            return new Date(`${cleanDate}T12:00:00`);
+        } catch { return new Date(); }
+    };
+
+    const diasEstadiaReal = vistaEstadia ? Math.max(1, differenceInDays(
+        getNoonDate(vistaEstadia.fecha_egreso_programada),
+        getNoonDate(vistaEstadia.fecha_ingreso)
+    )) : 1;
+
     const totalPersonas = (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona;
-    const totalCarpas = vistaEstadia.dias_parcela * (vistaEstadia.cant_parcelas_total || 0) * vistaEstadia.p_parcela;
-    const totalSillas = vistaEstadia.dias_parcela * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla;
-    const totalMesas = vistaEstadia.dias_parcela * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa;
-    const totalVehiculo = vistaEstadia.dias_parcela * vistaEstadia.p_vehiculo;
+
+    // Usar diasEstadiaReal en lugar de dias_parcela (que viene viciado por la vista)
+    const totalCarpas = diasEstadiaReal * (vistaEstadia.cant_parcelas_total || 0) * vistaEstadia.p_parcela;
+    const totalSillas = diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla;
+    const totalMesas = diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa;
+    const totalVehiculo = diasEstadiaReal * vistaEstadia.p_vehiculo;
+
     const subtotalIndividual = totalPersonas + totalCarpas + totalSillas + totalMesas + totalVehiculo;
     const descuentoIndividual = vistaEstadia.descuento_arbitrario || 0;
 
@@ -263,7 +282,7 @@ export default function SaldoPage() {
 
                             {/* Recursos */}
                             <div className="border-b pb-3">
-                                <p className="font-medium mb-2">Recursos ({vistaEstadia.dias_parcela} días)</p >
+                                <p className="font-medium mb-2">Recursos ({diasEstadiaReal} días)</p >
                                 <div className="space-y-1 text-sm">
                                     {(vistaEstadia.cant_parcelas_total || 0) > 0 && (
                                         <div className="grid grid-cols-2 gap-2 text-muted">
@@ -308,9 +327,9 @@ export default function SaldoPage() {
                                 {vistaEstadia.cant_parcelas_camping > 0 && (
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted">
-                                            Parcelas: {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_parcelas_camping} × ${vistaEstadia.p_parcela}
+                                            Parcelas: {diasEstadiaReal}d × {vistaEstadia.cant_parcelas_camping} × ${vistaEstadia.p_parcela}
                                         </span>
-                                        <span>{formatCurrency(vistaEstadia.dias_parcela * vistaEstadia.cant_parcelas_camping * vistaEstadia.p_parcela)}</span>
+                                        <span>{formatCurrency(diasEstadiaReal * vistaEstadia.cant_parcelas_camping * vistaEstadia.p_parcela)}</span>
                                     </div>
                                 )}
 
@@ -318,9 +337,9 @@ export default function SaldoPage() {
                                 {vistaEstadia.cant_camas > 0 && (
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted text-accent">
-                                            Camas (habitación): {vistaEstadia.dias_parcela}d × {vistaEstadia.cant_camas} × ${vistaEstadia.p_cama}
+                                            Camas (habitación): {diasEstadiaReal}d × {vistaEstadia.cant_camas} × ${vistaEstadia.p_cama}
                                         </span>
-                                        <span className="text-accent font-medium">{formatCurrency(vistaEstadia.dias_parcela * vistaEstadia.cant_camas * vistaEstadia.p_cama)}</span>
+                                        <span className="text-accent font-medium">{formatCurrency(diasEstadiaReal * vistaEstadia.cant_camas * vistaEstadia.p_cama)}</span>
                                     </div>
                                 )}
                                 <div className="grid grid-cols-2 gap-2">
