@@ -91,6 +91,7 @@ export function MapaParcelas({
     reservadas,
     seleccionadas = [],
     onSelect,
+    detalles,
     className
 }: MapaParcelasProps) {
     const [zoom, setZoom] = React.useState(150); // Default to 150%
@@ -172,7 +173,7 @@ export function MapaParcelas({
                                     top: `${coords.top}%`,
                                     left: `${coords.left}%`
                                 }}
-                                title={`Parcela ${id}`}
+                                title={detalles?.[id] || `Parcela ${id}`}
                             >
                                 {id}
                             </button>
@@ -218,7 +219,7 @@ export function MapaParcelas({
                     <span>Selección</span>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 

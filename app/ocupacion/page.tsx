@@ -628,6 +628,8 @@ export default function OcupacionPage() {
                                     let tooltip = `Parcela ${id}`;
                                     if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
                                         tooltip += '\n' + p.nombres_integrantes.join('\n');
+                                    } else if (p.estado === 'ocupada') {
+                                        tooltip += '\n(Sin nombres)';
                                     }
                                     acc[id] = tooltip;
                                 }
