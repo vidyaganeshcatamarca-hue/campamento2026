@@ -44,7 +44,8 @@ export default function OcupacionPage() {
 
     // Role
     const [role, setRole] = useState<string>('invitado');
-    const isReadOnly = role === 'auditor' || role === 'acomodacion';
+    const isReadOnly = role === 'auditor'; // Acomodacion can now edit map
+    const canEditMap = role === 'admin' || role === 'anfitrion' || role === 'acomodacion';
 
     // Separar parcelas
     const parcelasCamping = parcelas.filter(p => !p.nombre_parcela.toLowerCase().includes('cama'));
@@ -467,14 +468,26 @@ export default function OcupacionPage() {
                 estado: 'ocupada'
             };
 
-            // Only overwrite estadia_id if it was NULL (Free) or empty
-            if (!newP?.estadia_id && parcelaSeleccionada.estadia_id_ref) {
-                updateDestPayload.estadia_id = parcelaSeleccionada.estadia_id_ref;
+            // 4. Update Destination Logic (Shared vs Empty)
+            if (newP?.estadia_id) {
+                // If already occupied (Shared), keep existing estadia_id.
+                // Just update count and ensure state is occupied.
+                await supabase.from('parcelas')
+                    .update({
+                        cantidad_integrantes: newCount,
+                        estado: 'ocupada'
+                    })
+                    .eq('nombre_parcela', nuevaParcelaId);
+            } else {
+                // If free, take ownership (estadia_id)
+                await supabase.from('parcelas')
+                    .update({
+                        cantidad_integrantes: newCount,
+                        estado: 'ocupada',
+                        estadia_id: parcelaSeleccionada.estadia_id_ref
+                    })
+                    .eq('nombre_parcela', nuevaParcelaId);
             }
-
-            await supabase.from('parcelas')
-                .update(updateDestPayload)
-                .eq('nombre_parcela', nuevaParcelaId);
 
             alert('Mudanza exitosa.');
             setParcelaSeleccionada(null);
@@ -631,11 +644,24 @@ export default function OcupacionPage() {
                                     onChange={e => setNuevaParcelaId(e.target.value)}
                                 >
                                     <option value="">-- Seleccionar --</option>
-                                    {getParcelasDisponibles()
-                                        .sort((a, b) => a.nombre_parcela.localeCompare(b.nombre_parcela, undefined, { numeric: true }))
-                                        .map(p => (
-                                            <option key={p.nombre_parcela} value={p.nombre_parcela}>{p.nombre_parcela}</option>
-                                        ))}
+                                    <optgroup label="Libres">
+                                        {parcelas
+                                            .filter(p => p.estado === 'libre')
+                                            .sort((a, b) => a.nombre_parcela.localeCompare(b.nombre_parcela, undefined, { numeric: true }))
+                                            .map(p => (
+                                                <option key={p.nombre_parcela} value={p.nombre_parcela}>{p.nombre_parcela}</option>
+                                            ))}
+                                    </optgroup>
+                                    <optgroup label="Ocupadas (Compartir)">
+                                        {parcelas
+                                            .filter(p => p.estado === 'ocupada' && p.nombre_parcela !== parcelaSeleccionada.nombre_parcela)
+                                            .sort((a, b) => a.nombre_parcela.localeCompare(b.nombre_parcela, undefined, { numeric: true }))
+                                            .map(p => (
+                                                <option key={p.nombre_parcela} value={p.nombre_parcela}>
+                                                    {p.nombre_parcela} ({p.cantidad_integrantes || 0} pers)
+                                                </option>
+                                            ))}
+                                    </optgroup>
                                 </select>
                             </div>
                             <div className="flex gap-3 justify-end mt-4">
@@ -656,7 +682,7 @@ export default function OcupacionPage() {
                     </h1>
                     <div className="flex justify-between items-end">
                         <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
-                        {!isReadOnly && (
+                        {canEditMap && (
                             <Button
                                 variant={modoEdicion ? "danger" : "outline"}
                                 size="sm"
@@ -857,7 +883,7 @@ export default function OcupacionPage() {
 
                                 if (parcela.estado === 'ocupada') {
                                     // Allow Granular Move opening
-                                    if (!isReadOnly || role === 'acomodacion') {
+                                    if (!isReadOnly) {
                                         setParcelaSeleccionada(parcela);
                                         setSelectedOccupants(new Set());
                                     }
