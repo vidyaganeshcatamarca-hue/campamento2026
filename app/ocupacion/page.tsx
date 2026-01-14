@@ -681,7 +681,7 @@ export default function OcupacionPage() {
                         Dashboard de Ocupación
                     </h1>
                     <div className="flex justify-between items-end">
-                        <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
+                        <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos (Role: {role}) {isReadOnly ? '[ReadOnly]' : ''}</p>
                         {canEditMap && (
                             <Button
                                 variant={modoEdicion ? "danger" : "outline"}
