@@ -67,6 +67,9 @@ export default function OcupacionPage() {
     const [newParcelCoords, setNewParcelCoords] = useState<{ x: number, y: number } | null>(null);
     const [newParcelName, setNewParcelName] = useState('');
 
+    // List View State
+    const [showList, setShowList] = useState(false);
+
     // Egresos
     const [modoFecha, setModoFecha] = useState<'unica' | 'rango'>('unica');
     const [fechaEgreso, setFechaEgreso] = useState('');
@@ -847,15 +850,78 @@ export default function OcupacionPage() {
                 {/* Mapa Camping */}
                 <Card className="overflow-hidden">
                     <CardHeader className="bg-gray-50/50 pb-4">
-                        <CardTitle className="flex justify-between items-center">
+                        <CardTitle className="flex justify-between items-center flex-wrap gap-2">
                             <span>Mapa de Parcelas</span>
-                            <div className="flex gap-3 text-sm font-normal">
-                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-green-500 rounded-full"></div> Libre</span>
-                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500 rounded-full"></div> Ocupada</span>
-                                <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div> Reservada</span>
+                            <div className="flex gap-2 items-center">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowList(!showList)}
+                                >
+                                    {showList ? 'Ocultar Listado' : 'Implementar Listado'}
+                                </Button>
+                                <div className="flex gap-3 text-sm font-normal">
+                                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-green-500 rounded-full"></div> Libre</span>
+                                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500 rounded-full"></div> Ocupada</span>
+                                    <span className="flex items-center gap-1.5"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div> Reservada</span>
+                                </div>
                             </div>
                         </CardTitle>
                     </CardHeader>
+
+                    {/* List View Toggle */}
+                    {showList && (
+                        <div className="border-b bg-gray-50/50 p-4 max-h-[400px] overflow-y-auto">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {parcelas
+                                    .filter(p => !p.nombre_parcela.toLowerCase().includes('cama')) // Show only camping parcels
+                                    .sort((a, b) => {
+                                        const numA = parseInt(a.nombre_parcela.replace(/\D/g, '')) || 0;
+                                        const numB = parseInt(b.nombre_parcela.replace(/\D/g, '')) || 0;
+                                        return numA - numB;
+                                    })
+                                    .map(p => (
+                                        <div key={p.nombre_parcela} className={`p-3 rounded-lg border ${p.estado === 'ocupada' ? 'bg-red-50 border-red-200' : p.estado === 'reservada' ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="font-bold text-gray-700">Parcela {p.nombre_parcela}</span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`text-[10px] uppercase border ${p.estado === 'ocupada' ? 'bg-red-100 text-red-700 border-red-200' :
+                                                            p.estado === 'reservada' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                                                'bg-green-100 text-green-700 border-green-200'
+                                                        }`}
+                                                >
+                                                    {p.estado}
+                                                </Badge>
+                                            </div>
+                                            {p.estado === 'ocupada' && (
+                                                <div className="text-xs text-gray-600 mt-2 space-y-1">
+                                                    <div className="font-semibold text-gray-800 border-b border-gray-200 pb-1 mb-1">
+                                                        {p.cantidad_integrantes || 0} Ocupantes:
+                                                    </div>
+                                                    {p.nombres_integrantes && p.nombres_integrantes.length > 0 ? (
+                                                        <ul className="list-disc pl-4 space-y-0.5">
+                                                            {p.nombres_integrantes.map((nombre, i) => (
+                                                                <li key={i}>{nombre}</li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : (
+                                                        <p className="italic text-gray-400">Sin nombres registrados</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {p.estado === 'reservada' && (
+                                                <p className="text-xs italic text-yellow-700 mt-1">Reservada</p>
+                                            )}
+                                            {p.estado === 'libre' && (
+                                                <p className="text-xs italic text-green-700 mt-1">Disponible</p>
+                                            )}
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+                    )}
+
                     <CardContent className="p-0 sm:p-6">
                         <MapaParcelas
                             // Hybrid Props
