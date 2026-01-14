@@ -48,13 +48,18 @@ export default function ReporteTransferenciasPage() {
 
             if (pagosError) throw pagosError;
 
-            // 2. Enriquecer con datos del responsable
+            // Enriquecer con datos del responsable
             const pagosEnriquecidos = await Promise.all(pagosData.map(async (pago) => {
                 // Obtener TODOS los acampantes de la estadía para encontrar el mejor candidato
+                // Verify pago.estadia_id exists
+                if (!pago.estadia_id) return { ...pago, responsable_nombre: 'Sin Estadía', responsable_dni: '-', responsable_celular: '-' };
+
                 const { data: acampantes, error: acampError } = await supabase
                     .from('acampantes')
                     .select('nombre_completo, dni, celular, es_responsable_pago')
                     .eq('estadia_id', pago.estadia_id);
+
+                if (acampError) console.error('Error fetching acampantes for estadia', pago.estadia_id, acampError);
 
                 let nombre = 'Desconocido';
                 let dni = '-';

@@ -89,7 +89,10 @@ export default function ExtensionPage() {
             : (estadia.cant_personas_total || 0) * estadia.p_persona;
 
         // 2. Costo Parcela/Recursos Diario
-        const costoParcelaDiario = (estadia.cant_parcelas_total || 0) * estadia.p_parcela;
+        const isHabitacion = estadia.cant_camas > 0 || (estadia as any).es_habitacion;
+        const costoParcelaDiario = isHabitacion
+            ? 0 // Las habitaciones no cobran costo de parcela aparte
+            : (estadia.cant_parcelas_total || 0) * estadia.p_parcela;
 
         // 3. Extras Diarios
         const costoExtrasDiario =

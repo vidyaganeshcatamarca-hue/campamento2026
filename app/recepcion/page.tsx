@@ -82,8 +82,13 @@ export default function RecepcionPage() {
     }, [arribos, searchQuery]);
 
     const handleArriboClick = (arribo: ArriboWithEstadia) => {
-        if (arribo.estadia?.id) {
-            router.push(`/checkin/${arribo.estadia.id}`);
+        // Fallback to direct ID if joined object is missing
+        const targetId = arribo.estadia?.id || arribo.estadia_id;
+
+        if (targetId) {
+            router.push(`/checkin/${targetId}`);
+        } else {
+            console.error('Arribo sin ID de estadía:', arribo);
         }
     };
 
