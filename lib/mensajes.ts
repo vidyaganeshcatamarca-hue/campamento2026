@@ -52,7 +52,7 @@ Esperamos que el regreso a casa sea tranquilo y que te lleves contigo un poquito
 Te invitamos a volver cuando gustes antes de que se termine!
 Tu opinión nos ayuda a seguir mejorando. Nos encantaría que nos regales 2 minutos para completar nuestra Encuesta de Satisfacción, donde podrás contarnos qué tal estuvo todo y compartir esa experiencia trascendental que viviste entre nosotros:
 
-👉 Enlace https://chat.whatsapp.com/IgjkATfNLf0HIlxopRnQaR
+👉 Enlace https://forms.gle/5TmNnYuuC9gG5mR86
 
 
 ¡Vuelve pronto!🙏😊`;

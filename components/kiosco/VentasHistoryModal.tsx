@@ -39,7 +39,7 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
 
             let query = supabase
                 .from('kiosco_ventas')
-                .select('*')
+                .select('*, kiosco_productos(nombre)')
                 .gte('fecha', desde)
                 .lte('fecha', hasta)
                 .order('fecha', { ascending: false });
@@ -91,7 +91,9 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
     };
 
     const filteredVentas = ventas.filter(v =>
-        v.producto_nombre?.toLowerCase().includes(busqueda.toLowerCase())
+        // Safely access nested product name
+        // @ts-ignore
+        (v.kiosco_productos?.nombre || 'Producto Eliminado').toLowerCase().includes(busqueda.toLowerCase())
     );
 
     return (
@@ -154,7 +156,8 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
                                                 {format(new Date(venta.fecha), 'dd/MM/yyyy HH:mm')}
                                             </td>
                                             <td className="p-3 font-medium text-gray-800">
-                                                {venta.producto_nombre}
+                                                {/* @ts-ignore */}
+                                                {venta.kiosco_productos?.nombre || 'Producto Eliminado'}
                                             </td>
 
                                             {/* Editable Fields */}

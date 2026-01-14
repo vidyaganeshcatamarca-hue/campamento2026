@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // Removed unused View import to avoid confusion
+import { supabase } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Home, Calendar, LogOut, Users } from 'lucide-react';
 import { MapaParcelas } from '@/components/ui/MapaParcelas';
 import Cookies from 'js-cookie';
+import { ReingresoModal } from '@/components/ocupacion/ReingresoModal';
 
 interface ParcelaConEstadia {
     nombre_parcela: string;
@@ -37,6 +38,9 @@ export default function OcupacionPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [parcelas, setParcelas] = useState<ParcelaConEstadia[]>([]);
+
+    // Reingreso Modal
+    const [showReingresoModal, setShowReingresoModal] = useState(false);
 
     // KPIs and Filters
     const [disponiblesHoy, setDisponiblesHoy] = useState(0);
@@ -635,6 +639,11 @@ export default function OcupacionPage() {
 
     return (
         <Layout>
+            <ReingresoModal
+                isOpen={showReingresoModal}
+                onClose={() => setShowReingresoModal(false)}
+            />
+
             {/* Modal Mudanza */}
             {parcelaSeleccionada && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -690,41 +699,56 @@ export default function OcupacionPage() {
                     </h1>
                     <div className="flex justify-between items-end">
                         <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
-                        {canEditMap && (
+                        <div className="flex gap-2">
                             <Button
-                                variant={modoEdicion ? "danger" : "outline"}
+                                variant="outline"
                                 size="sm"
-                                onClick={() => setModoEdicion(!modoEdicion)}
+                                onClick={() => setShowReingresoModal(true)}
+                                className="flex items-center gap-1"
                             >
-                                {modoEdicion ? "Salir Edición" : "Editar Mapa"}
+                                <span className="text-lg">↺</span> Reingreso
                             </Button>
-                        )}
+
+                            {canEditMap && (
+                                <Button
+                                    variant={modoEdicion ? "danger" : "outline"}
+                                    size="sm"
+                                    onClick={() => setModoEdicion(!modoEdicion)}
+                                >
+                                    {modoEdicion ? "Salir Edición" : "Editar Mapa"}
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Create Parcel Modal */}
-                {showCreateModal && (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-sm bg-white">
-                            <CardHeader><CardTitle>Crear Nueva Parcela</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-medium">Nombre de la Parcela</label>
-                                    <Input
-                                        value={newParcelName}
-                                        onChange={e => setNewParcelName(e.target.value)}
-                                        placeholder="Ej: 60, Zona F..."
-                                        autoFocus
-                                    />
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                    <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
-                                    <Button onClick={handleCreateParcel} disabled={!newParcelName || procesandoCambio}>Crear</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
+
+                {/* Create Parcel Modal */}
+                {
+                    showCreateModal && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <Card className="w-full max-w-sm bg-white">
+                                <CardHeader><CardTitle>Crear Nueva Parcela</CardTitle></CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <label className="text-sm font-medium">Nombre de la Parcela</label>
+                                        <Input
+                                            value={newParcelName}
+                                            onChange={e => setNewParcelName(e.target.value)}
+                                            placeholder="Ej: 60, Zona F..."
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="flex gap-2 justify-end">
+                                        <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
+                                        <Button onClick={handleCreateParcel} disabled={!newParcelName || procesandoCambio}>Crear</Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )
+                }
 
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -817,31 +841,33 @@ export default function OcupacionPage() {
                 </Card>
 
                 {/* Habitaciones */}
-                {camasTotales > 0 && (
-                    <Card>
-                        <CardHeader><CardTitle>Habitación Compartida ({camasOcupadas}/{camasTotales})</CardTitle></CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {camasHabitacion.map(cama => (
-                                    <div key={cama.nombre_parcela} className="p-4 border rounded-lg relative">
-                                        <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} />
-                                        <h3 className="font-bold">{cama.nombre_parcela}</h3>
-                                        {cama.estado === 'ocupada' ? (
-                                            <>
-                                                <p className="text-xs text-muted truncate">{cama.estadia_nombre}</p>
-                                                {!isReadOnly && (
-                                                    <Button variant="outline" size="xs" className="mt-2 w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>Mudar</Button>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <p className="text-xs text-green-600 font-medium mt-1">Disponible</p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
+                {
+                    camasTotales > 0 && (
+                        <Card>
+                            <CardHeader><CardTitle>Habitación Compartida ({camasOcupadas}/{camasTotales})</CardTitle></CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {camasHabitacion.map(cama => (
+                                        <div key={cama.nombre_parcela} className="p-4 border rounded-lg relative">
+                                            <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} />
+                                            <h3 className="font-bold">{cama.nombre_parcela}</h3>
+                                            {cama.estado === 'ocupada' ? (
+                                                <>
+                                                    <p className="text-xs text-muted truncate">{cama.estadia_nombre}</p>
+                                                    {!isReadOnly && (
+                                                        <Button variant="outline" size="xs" className="mt-2 w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>Mudar</Button>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p className="text-xs text-green-600 font-medium mt-1">Disponible</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )
+                }
 
                 {/* Mapa Camping */}
                 <Card className="overflow-hidden">
@@ -964,7 +990,7 @@ export default function OcupacionPage() {
                         />
                     </CardContent>
                 </Card>
-            </div>
-        </Layout>
+            </div >
+        </Layout >
     );
 }
