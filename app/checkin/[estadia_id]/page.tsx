@@ -494,6 +494,62 @@ export default function CheckInPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
+                        {/* Section: Habitaciones (Camas) */}
+                        {parcelasDisponibles.filter(p => p.nombre_parcela.toLowerCase().includes('cama')).length > 0 && (
+                            <div className="mb-6 border-b pb-6">
+                                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                    Habitación Compartida
+                                </h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    {parcelasDisponibles
+                                        .filter(p => p.nombre_parcela.toLowerCase().includes('cama'))
+                                        .map(cama => {
+                                            const isSelected = parcelasSeleccionadas.includes(cama.id);
+                                            return (
+                                                <div
+                                                    key={cama.id}
+                                                    onClick={() => {
+                                                        if (cama.estado === 'ocupada' && !isSelected) {
+                                                            setPendingParcela(cama);
+                                                            setShowConfirmDialog(true);
+                                                        } else {
+                                                            toggleParcela(cama.id);
+                                                        }
+                                                    }}
+                                                    className={`
+                                                        relative p-3 rounded-lg border cursor-pointer transition-all
+                                                        ${isSelected
+                                                            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500'
+                                                            : cama.estado === 'ocupada'
+                                                                ? 'bg-red-50 border-red-200 hover:border-red-300'
+                                                                : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                                        }
+                                                    `}
+                                                >
+                                                    <div className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : isSelected ? 'bg-blue-500' : 'bg-green-500'}`} />
+                                                    <h4 className={`font-bold text-sm ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>{cama.nombre_parcela}</h4>
+
+                                                    {cama.estado === 'ocupada' ? (
+                                                        <p className="text-xs text-red-600 mt-1 truncate">
+                                                            {cama.responsable_nombre || 'Ocupada'}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-xs text-green-600 mt-1 font-medium">Disponible</p>
+                                                    )}
+
+                                                    {isSelected && (
+                                                        <div className="absolute -top-1 -right-1 bg-blue-600 text-white rounded-full p-0.5">
+                                                            <CheckCircle className="w-3 h-3" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        )}
+
                         {parcelasDisponibles.length === 0 ? (
                             <p className="text-center text-muted py-4">
                                 No hay parcelas disponibles en este momento
