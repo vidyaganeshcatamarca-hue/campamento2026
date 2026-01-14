@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { EditCamperModal } from '@/components/EditCamperModal';
-import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock } from 'lucide-react';
+import { CheckoutControlModal } from '@/components/dashboard/CheckoutControlModal';
+import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock, ClipboardCheck } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import Cookies from 'js-cookie';
@@ -32,6 +33,7 @@ export default function DashboardPage() {
 
     // Estado para edición
     const [editingPersona, setEditingPersona] = useState<Acampante | null>(null);
+    const [showCheckoutControl, setShowCheckoutControl] = useState(false);
 
     // KPIs
     const [stats, setStats] = useState({
@@ -252,6 +254,24 @@ export default function DashboardPage() {
                         >
                             <DollarSign className="w-4 h-4 text-green-600" />
                             Transferencias
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                                "flex items-center gap-2 border-amber-200 hover:bg-amber-50 text-amber-900",
+                                overdueStays.length > 0 ? "animate-pulse border-amber-400" : ""
+                            )}
+                            onClick={() => setShowCheckoutControl(true)}
+                        >
+                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                            Checkout Control
+                            {overdueStays.length > 0 && (
+                                <Badge className="ml-1 bg-amber-500 hover:bg-amber-600 text-[10px] h-5 px-1.5">
+                                    {overdueStays.length}
+                                </Badge>
+                            )}
                         </Button>
 
                         <label className={cn(
@@ -511,6 +531,12 @@ export default function DashboardPage() {
                         fetchData(); // Refresh on close
                     }}
                     acampante={editingPersona}
+                />
+
+                <CheckoutControlModal
+                    isOpen={showCheckoutControl}
+                    onClose={() => setShowCheckoutControl(false)}
+                    overdueItems={items.filter(item => overdueStays.some(o => o.id === item.estadia.id))}
                 />
             </div>
         </Layout>
