@@ -41,6 +41,8 @@ export default function CheckoutPage() {
     const [role, setRole] = useState<string>('invitado');
     const isAuditor = role === 'auditor';
 
+    const [totalPagadoReal, setTotalPagadoReal] = useState(0);
+
     useEffect(() => {
         const session = Cookies.get('camp_session');
         if (session) {
@@ -67,14 +69,15 @@ export default function CheckoutPage() {
             setEstadia(vista);
 
             // 2. Responsable
-            const { data: resp, error: respError } = await supabase
+            // Try to find marked responsible, otherwise fallback to any adult/first person
+            const { data: acampantes, error: acampError } = await supabase
                 .from('acampantes')
                 .select('*')
-                .eq('estadia_id', estadiaId)
-                .eq('es_responsable_pago', true)
-                .single();
+                .eq('estadia_id', estadiaId);
 
-            if (respError) throw respError;
+            if (acampError) throw acampError;
+
+            const resp = acampantes?.find(a => a.es_responsable_pago) || acampantes?.[0] || null;
             setResponsable(resp);
 
             // 3. Parcelas asignadas
@@ -84,6 +87,16 @@ export default function CheckoutPage() {
                 .eq('estadia_id', estadiaId);
 
             setParcelas(parcelasData?.map(p => p.nombre_parcela) || []);
+
+
+            // 4. Fetch Pagos explicitly to ensure accuracy
+            const { data: pagosData } = await supabase
+                .from('pagos')
+                .select('monto_abonado')
+                .eq('estadia_id', estadiaId);
+
+            const totalPagado = pagosData?.reduce((acc, curr) => acc + curr.monto_abonado, 0) || 0;
+            setTotalPagadoReal(totalPagado);
 
             // Setear fecha de salida por defecto = hoy
             setFechaSalidaReal(new Date().toISOString().split('T')[0]);
@@ -110,16 +123,8 @@ export default function CheckoutPage() {
         const diasProgramados = estadia.dias_parcela;
         const diferenciaDias = diasReales - diasProgramados;
 
-        // Costo por día de recursos (no personas, esas se cobraron por noches reales)
-        const costoPorDiaRecursos = (
-            (estadia.cant_parcelas_total || 0) * estadia.p_parcela +
-            (estadia.cant_sillas_total || 0) * estadia.p_silla +
-            (estadia.cant_mesas_total || 0) * estadia.p_mesa +
-            estadia.p_vehiculo
-        );
-
         // Ajuste Calculado vs Manual
-        let ajuste = diferenciaDias * costoPorDiaRecursos;
+        let ajuste = 0;
 
         if (usarMontoManual) {
             ajuste = montoManual;
@@ -127,13 +132,14 @@ export default function CheckoutPage() {
 
         // Nuevo total
         const nuevoTotal = estadia.monto_total_final + ajuste;
+        const nuevoSaldo = nuevoTotal - totalPagadoReal;
 
         return {
             diasReales,
             diferenciaDias,
             ajuste,
             nuevoTotal,
-            nuevoSaldo: nuevoTotal - (estadia.monto_total_final - estadia.saldo_pendiente), // total - ya_pagado
+            nuevoSaldo // Total - Real Paid Sum
         };
     };
 

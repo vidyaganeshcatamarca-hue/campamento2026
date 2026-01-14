@@ -125,7 +125,7 @@ export default function ReporteTransferenciasPage() {
             return;
         }
 
-        const headers = ['Fecha', 'Monto', 'Responsable', 'DNI', 'Celular', 'ID Estadía'];
+        const headers = ['Fecha', 'Monto', 'Responsable', 'DNI'];
         const csvContent = [
             headers.join(','),
             ...pagosExportables.map(p => {
@@ -133,9 +133,8 @@ export default function ReporteTransferenciasPage() {
                 const monto = p.monto_abonado;
                 const nombre = `"${p.responsable_nombre}"`; // Escape quotes
                 const dni = p.responsable_dni || '';
-                const cel = p.responsable_celular || '';
 
-                return [fecha, monto, nombre, dni, cel, p.estadia_id].join(',');
+                return [fecha, monto, nombre, dni].join(',');
             })
         ].join('\n');
 
