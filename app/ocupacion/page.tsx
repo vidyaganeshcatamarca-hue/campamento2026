@@ -658,7 +658,7 @@ export default function OcupacionPage() {
                         <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
                         {!isReadOnly && (
                             <Button
-                                variant={modoEdicion ? "destructive" : "outline"}
+                                variant={modoEdicion ? "danger" : "outline"}
                                 size="sm"
                                 onClick={() => setModoEdicion(!modoEdicion)}
                             >
@@ -826,6 +826,8 @@ export default function OcupacionPage() {
                             // Hybrid Props
                             parcelas={parcelas.map(p => ({
                                 ...p,
+                                nombre: p.nombre_parcela,
+                                estado: p.estado as 'libre' | 'ocupada' | 'reservada',
                                 id: parseInt(p.nombre_parcela.replace(/\D/g, '')) || 999
                             })).filter(p => !isNaN(p.id))}
 

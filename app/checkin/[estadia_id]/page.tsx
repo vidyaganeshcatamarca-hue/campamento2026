@@ -22,6 +22,8 @@ interface ParcelaConInfo extends Parcela {
     responsable_nombre?: string;
     celular_responsable?: string;
     cant_personas?: number;
+    pos_x?: number;
+    pos_y?: number;
 }
 
 export default function CheckInPage() {
@@ -128,7 +130,9 @@ export default function CheckInPage() {
                         nombre_parcela: p.nombre_parcela,
                         estado: p.estado,
                         cantidad_integrantes: p.cantidad_integrantes || 0,
-                        responsable_nombre: responsable_nombre || (p.cantidad_integrantes > 0 ? `${p.cantidad_integrantes} personas` : undefined)
+                        responsable_nombre: responsable_nombre || (p.cantidad_integrantes > 0 ? `${p.cantidad_integrantes} personas` : undefined),
+                        pos_x: p.pos_x,
+                        pos_y: p.pos_y
                     };
                 })
             );
@@ -547,12 +551,14 @@ export default function CheckInPage() {
                                 </div>
 
                                 <MapaParcelas
-                                    ocupadas={parcelasDisponibles
-                                        .filter(p => p.estado === 'ocupada')
-                                        .map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
-                                    reservadas={parcelasDisponibles
-                                        .filter(p => p.estado === 'reservada')
-                                        .map(p => parseInt(p.nombre_parcela.replace(/\D/g, '')))}
+                                    // Fix: Use 'parcelas' prop instead of legacy ocupadas/reservadas
+                                    parcelas={parcelasDisponibles.map(p => ({
+                                        id: parseInt(p.nombre_parcela.replace(/\D/g, '')) || 0,
+                                        nombre: p.nombre_parcela,
+                                        estado: p.estado as 'ocupada' | 'libre' | 'reservada',
+                                        pos_x: p.pos_x,
+                                        pos_y: p.pos_y
+                                    })).filter(p => p.id > 0)}
                                     seleccionadas={parcelasSeleccionadas.map(pid => {
                                         const p = parcelasDisponibles.find(pd => pd.id === pid);
                                         return p ? parseInt(p.nombre_parcela.replace(/\D/g, '')) : 0;
