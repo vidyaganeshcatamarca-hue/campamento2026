@@ -203,10 +203,13 @@ export default function OcupacionPage() {
                     // Use first stay for reference (egreso/nombre principal) but show size of group
                     const principal = estadiasCorrespondientes[0];
 
+                    // Find name matching main contact phone OR just pick first from list
+                    const mainName = acampantesMap[principal.id]?.[0] || principal.celular_responsable;
+
                     return {
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
-                        estadia_nombre: principal.celular_responsable, // Main contact
+                        estadia_nombre: mainName, // NOW SHOWING NAME NOT PHONE
                         fecha_egreso: principal.fecha_egreso_programada,
                         estadia_id_ref: principal.id,
                         cantidad_integrantes: parcela.cantidad_integrantes,
@@ -292,16 +295,22 @@ export default function OcupacionPage() {
                     }
                 }
 
-                // Fetch Name
-                const { data: acampanteData } = await supabase
+                // Fetch Name - CORRECTED: Fetch by estadia_id to get actual occupant(s)
+                // Since an estadia represents a group, we might have multiple people.
+                // But typically if it's listed individually in 'estadias' table by ID, we want the people associated.
+                const { data: acampantesData } = await supabase
                     .from('acampantes')
                     .select('nombre_completo')
-                    .eq('celular', estadia.celular_responsable)
-                    .single();
+                    .eq('estadia_id', estadia.id); // Specific to this stay ID
+
+                // If multiple names, join them. If strict 1-1, it will be one.
+                const resolvedName = acampantesData
+                    ? acampantesData.map((a: any) => a.nombre_completo).join(', ')
+                    : 'Sin Nombre';
 
                 egresosInfo.push({
                     responsable: estadia.celular_responsable,
-                    nombre: acampanteData?.nombre_completo || 'Sin Nombre',
+                    nombre: resolvedName || 'Sin Nombre',
                     celular: estadia.celular_responsable,
                     parcelas: nombresParcelas,
                     cant_personas: estadia.cant_personas_total || 0,
@@ -635,7 +644,7 @@ export default function OcupacionPage() {
                             <CardTitle>Mudar Parcela: {parcelaSeleccionada.nombre_parcela}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <p className="text-sm text-muted">Estadía de: <span className="font-semibold">{parcelaSeleccionada.estadia_nombre}</span></p>
+                            <p className="text-sm text-muted">Estadía de: <span className="font-semibold text-primary">{parcelaSeleccionada.estadia_nombre}</span></p>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Nueva Parcela (Libre)</label>
                                 <select
@@ -681,7 +690,7 @@ export default function OcupacionPage() {
                         Dashboard de Ocupación
                     </h1>
                     <div className="flex justify-between items-end">
-                        <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos (Role: {role}) {isReadOnly ? '[ReadOnly]' : ''}</p>
+                        <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
                         {canEditMap && (
                             <Button
                                 variant={modoEdicion ? "danger" : "outline"}
