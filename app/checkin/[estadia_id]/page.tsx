@@ -243,6 +243,10 @@ export default function CheckInPage() {
                     cant_sillas_total: estadia.cant_sillas_total,
                     cant_mesas_total: estadia.cant_mesas_total,
                     tipo_vehiculo: estadia.tipo_vehiculo,
+                    // FIX: Save assigned parcel NOW so the View calculates correct price (Room vs Camping)
+                    parcela_asignada: parcelasSeleccionadas.length > 0
+                        ? parcelasDisponibles.find(p => p.id === parcelasSeleccionadas[0])?.nombre_parcela || null
+                        : null
                 })
                 .eq('id', estadiaId);
 
