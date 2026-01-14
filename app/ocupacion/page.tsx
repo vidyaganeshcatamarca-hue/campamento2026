@@ -542,26 +542,22 @@ export default function OcupacionPage() {
         }
     };
 
-    const handleDragEnd = async (id: number, x: number, y: number) => {
-        // Find parcel name from ID (Legacy ID parsing or direct lookup if we had it)
-        // Wait, MapaParcelas passes ID. Our ID is the number.
-        // We need to match it to DB record. 
-        // Best effort: find in 'parcelas' state by parsing number.
-        const p = parcelas.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
+    const handleDragEnd = async (id: string | number, x: number, y: number) => {
+        // ID is now the string name directly
+        const p = parcelas.find(p => p.nombre_parcela === String(id));
         if (!p) return;
 
+        // Optimistic UI Update not critical here, but could set state.
+        // Direct DB update
         try {
-            await supabase.from('parcelas')
-                .update({ pos_x: x, pos_y: y })
-                .eq('nombre_parcela', p.nombre_parcela);
-
-            // Optimistic update or refresh? Refresh is safer.
-            // fetchData(); // Might be too heavy on drag. Maybe just log?
-            console.log(`Saved position for ${p.nombre_parcela}: ${x}, ${y}`);
+            await supabase.from('parcelas').update({ pos_x: x, pos_y: y }).eq('nombre_parcela', p.nombre_parcela);
+            // Refresh to sync
+            fetchData();
         } catch (e) {
-            console.error('Error saving position', e);
+            console.error('Error saving pos:', e);
         }
     };
+
 
     const handleReservarParcela = async (nombre: string) => {
         if (isReadOnly) return;
@@ -929,8 +925,8 @@ export default function OcupacionPage() {
                                 ...p,
                                 nombre: p.nombre_parcela,
                                 estado: p.estado as 'libre' | 'ocupada' | 'reservada',
-                                id: parseInt(p.nombre_parcela.replace(/\D/g, '')) || 999
-                            })).filter(p => !isNaN(p.id))}
+                                id: p.nombre_parcela // Use name as ID (String)
+                            }))}
 
                             // Editor Props
                             modoEdicion={modoEdicion}
@@ -938,22 +934,19 @@ export default function OcupacionPage() {
                             onParcelDragEnd={handleDragEnd}
 
                             detalles={parcelas.reduce((acc, p) => {
-                                const id = parseInt(p.nombre_parcela.replace(/\D/g, ''));
-                                if (!isNaN(id)) {
-                                    // Tooltip: "Parcela X" + "\nNombre 1" + "\nNombre 2"
-                                    let tooltip = `Parcela ${id}`;
-                                    if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
-                                        tooltip += '\n' + p.nombres_integrantes.join('\n');
-                                        tooltip += `\n(Total: ${p.nombres_integrantes.length})`; // Debug Count
-                                    } else if (p.estado === 'ocupada') {
-                                        tooltip += '\n(Sin nombres)';
-                                    }
-                                    acc[id] = tooltip;
+                                // Tooltip: "Parcela X" + "\nNombre 1" + "\nNombre 2"
+                                let tooltip = `Parcela ${p.nombre_parcela}`;
+                                if (p.estado === 'ocupada' && p.nombres_integrantes && p.nombres_integrantes.length > 0) {
+                                    tooltip += '\n' + p.nombres_integrantes.join('\n');
+                                    tooltip += `\n(Total: ${p.nombres_integrantes.length})`; // Debug Count
+                                } else if (p.estado === 'ocupada') {
+                                    tooltip += '\n(Sin nombres)';
                                 }
+                                acc[p.nombre_parcela] = tooltip;
                                 return acc;
-                            }, {} as Record<number, string>)}
+                            }, {} as Record<string | number, string>)}
                             onSelect={(id) => {
-                                const parcela = parcelas.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
+                                const parcela = parcelas.find(p => p.nombre_parcela === String(id));
                                 if (!parcela) return;
 
                                 if (parcela.estado === 'ocupada') {

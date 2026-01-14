@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface ParcelaMapData {
-    id: number;
+    id: string | number;
     nombre: string;
     estado: string; // 'libre' | 'ocupada' | 'reservada'
     pos_x?: number; // 0-100%
@@ -13,14 +13,14 @@ export interface ParcelaMapData {
 
 interface MapaParcelasProps {
     parcelas: ParcelaMapData[]; // Replaces simple number arrays
-    seleccionadas?: number[];
-    onSelect?: (parcelaId: number) => void;
-    detalles?: Record<number, string>;
+    seleccionadas?: (string | number)[];
+    onSelect?: (parcelaId: string | number) => void;
+    detalles?: Record<string | number, string>;
     className?: string;
 
     // Editor Props
     modoEdicion?: boolean;
-    onParcelDragEnd?: (id: number, x: number, y: number) => void;
+    onParcelDragEnd?: (id: string | number, x: number, y: number) => void;
     onMapClick?: (x: number, y: number) => void;
 }
 
@@ -124,7 +124,7 @@ export function MapaParcelas({
     };
 
     // Simple Drag Logic
-    const handleDragEnd = (e: React.DragEvent, id: number) => {
+    const handleDragEnd = (e: React.DragEvent, id: string | number) => {
         if (!modoEdicion || !onParcelDragEnd || !mapContentRef.current) return;
 
         // Prevent default ghost image behavior interference if necessary
@@ -158,10 +158,11 @@ export function MapaParcelas({
 
                     {parcelas.map((p) => {
                         const id = p.id;
-                        // Hibrido: Usa DB coords si existen, sino Legacy
+                        // Hibrido: Usa DB coords si existen, sino Legacy (fuzzy match number)
+                        const legacyId = typeof id === 'string' ? parseInt(id.replace(/\D/g, '')) : id;
                         const coords = p.pos_x && p.pos_y
                             ? { top: p.pos_y, left: p.pos_x }
-                            : COORDENADAS[id];
+                            : (legacyId ? COORDENADAS[legacyId] : null);
 
                         if (!coords) return null; // Skip if no coords found
 
