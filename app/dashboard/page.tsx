@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { EditCamperModal } from '@/components/EditCamperModal';
 import { CheckoutControlModal } from '@/components/dashboard/CheckoutControlModal';
-import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock, ClipboardCheck } from 'lucide-react';
+import { VisitorsListModal } from '@/components/dashboard/VisitorsListModal';
+import { Users, AlertTriangle, CheckCircle, Search, DollarSign, Tent, Sun, CalendarPlus, Wallet, Phone, LayoutGrid, List as ListIcon, MoreHorizontal, Clock, ClipboardCheck, UserCheck } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import Cookies from 'js-cookie';
@@ -40,8 +41,11 @@ export default function DashboardPage() {
         totalPersonas: 0,
         totalDeuda: 0,
         personasRiesgo: 0,
-        ocupacionParcelas: 0
+        ocupacionParcelas: 0,
+        visitantesHoy: 0
     });
+
+    const [showVisitorsList, setShowVisitorsList] = useState(false);
 
     useEffect(() => {
         // Load Role
@@ -134,7 +138,8 @@ export default function DashboardPage() {
                 totalPersonas: acampantes?.length || 0,
                 totalDeuda,
                 personasRiesgo,
-                ocupacionParcelas: ocupacion
+                ocupacionParcelas: ocupacion,
+                visitantesHoy: 0
             });
 
             // Feat W: Check for overdue stays
@@ -150,6 +155,20 @@ export default function DashboardPage() {
             }) || [];
 
             setOverdueStays(expired);
+
+            // Fetch Visitors Today
+            const { count: visitorsCount, error: visitorsError } = await supabase
+                .from('visitas_diarias')
+                .select('*', { count: 'exact', head: true })
+                .gte('fecha_visita', today.toISOString());
+
+            setStats({
+                totalPersonas: acampantes?.length || 0,
+                totalDeuda,
+                personasRiesgo,
+                ocupacionParcelas: ocupacion,
+                visitantesHoy: visitorsCount || 0
+            });
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -229,6 +248,18 @@ export default function DashboardPage() {
                             </div>
                             <p className="text-2xl font-bold text-gray-800">{stats.ocupacionParcelas}</p>
                             <p className="text-xs text-muted font-medium uppercase tracking-wide">Parcelas</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-white/60 backdrop-blur-sm border-purple-200 cursor-pointer hover:bg-white/80 transition-colors" onClick={() => setShowVisitorsList(true)}>
+                        <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                            <div className="p-2 bg-purple-100/50 rounded-full mb-2">
+                                <UserCheck className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <p className="text-2xl font-bold text-gray-800">{stats.visitantesHoy}</p>
+                            <div className="flex items-center gap-1">
+                                <p className="text-xs text-muted font-medium uppercase tracking-wide">Visitantes Hoy</p>
+                                <ListIcon className="w-3 h-3 text-purple-400" />
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -537,6 +568,11 @@ export default function DashboardPage() {
                     isOpen={showCheckoutControl}
                     onClose={() => setShowCheckoutControl(false)}
                     overdueItems={items.filter(item => overdueStays.some(o => o.id === item.estadia.id))}
+                />
+
+                <VisitorsListModal
+                    isOpen={showVisitorsList}
+                    onClose={() => setShowVisitorsList(false)}
                 />
             </div>
         </Layout>

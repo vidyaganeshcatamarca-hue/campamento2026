@@ -115,17 +115,25 @@ export default function ReporteTransferenciasPage() {
     };
 
     const handleExportar = () => {
-        if (pagos.length === 0) return;
+        // Filter out manual receipts per request: "donde el campo recibo manual no está marcado, o sea, está en blanco"
+        // In our enrichment logic, we set `recibo_emitido` to false if null.
+        // So we filter where it is false.
+        const pagosExportables = pagos.filter(p => p.recibo_emitido === false);
+
+        if (pagosExportables.length === 0) {
+            toast.error('No hay pagos pendientes de recibo para exportar.');
+            return;
+        }
 
         const headers = ['Fecha', 'Monto', 'Responsable', 'DNI', 'Celular', 'ID Estadía'];
         const csvContent = [
             headers.join(','),
-            ...pagos.map(p => {
+            ...pagosExportables.map(p => {
                 const fecha = new Date(p.fecha_pago).toLocaleDateString('es-AR');
                 const monto = p.monto_abonado;
                 const nombre = `"${p.responsable_nombre}"`; // Escape quotes
-                const dni = p.responsable_dni;
-                const cel = p.responsable_celular;
+                const dni = p.responsable_dni || '';
+                const cel = p.responsable_celular || '';
 
                 return [fecha, monto, nombre, dni, cel, p.estadia_id].join(',');
             })
@@ -135,7 +143,7 @@ export default function ReporteTransferenciasPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
-        link.setAttribute('download', `reporte_transferencias_${fechaDesde}_${fechaHasta}.csv`);
+        link.setAttribute('download', `reporte_transferencias_pendientes_${fechaDesde}_${fechaHasta}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
