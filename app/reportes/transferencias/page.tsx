@@ -115,9 +115,7 @@ export default function ReporteTransferenciasPage() {
     };
 
     const handleExportar = () => {
-        // Filter out manual receipts per request: "donde el campo recibo manual no está marcado, o sea, está en blanco"
-        // In our enrichment logic, we set `recibo_emitido` to false if null.
-        // So we filter where it is false.
+        // Filter out manual receipts per request
         const pagosExportables = pagos.filter(p => p.recibo_emitido === false);
 
         if (pagosExportables.length === 0) {
@@ -125,14 +123,18 @@ export default function ReporteTransferenciasPage() {
             return;
         }
 
+        // CSV Headers matching request
         const headers = ['Fecha', 'Monto', 'Responsable', 'DNI'];
+
         const csvContent = [
             headers.join(','),
             ...pagosExportables.map(p => {
                 const fecha = new Date(p.fecha_pago).toLocaleDateString('es-AR');
+                // Force number format just in case
                 const monto = p.monto_abonado;
-                const nombre = `"${p.responsable_nombre}"`; // Escape quotes
-                const dni = p.responsable_dni || '';
+                // Ensure name/dni match the enriched fields
+                const nombre = `"${p.responsable_nombre || 'Desconocido'}"`;
+                const dni = `"${p.responsable_dni || '-'}"`; // Quote DNI to prevent scientific notation if long
 
                 return [fecha, monto, nombre, dni].join(',');
             })

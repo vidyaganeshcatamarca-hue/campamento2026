@@ -10,6 +10,7 @@ import { BarChart3, DollarSign, ShoppingBag, TrendingUp } from 'lucide-react';
 import { formatCurrency, sendWhatsAppNotification } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/Dialog';
+import { VentasHistoryModal } from '@/components/kiosco/VentasHistoryModal';
 
 interface VentaDiaria {
     fecha: string;
@@ -39,6 +40,7 @@ export default function KioscoAuditoriaPage() {
 
     // Modal state
     const [showModalRendicion, setShowModalRendicion] = useState(false);
+    const [showModalHistory, setShowModalHistory] = useState(false);
     const [montoRendicion, setMontoRendicion] = useState('');
     const [procesandoRendicion, setProcesandoRendicion] = useState(false);
 
@@ -302,6 +304,10 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                             <DollarSign className="w-4 h-4 mr-2" />
                             Rendir Dinero
                         </Button>
+                        <Button onClick={() => setShowModalHistory(true)} variant="outline">
+                            <ShoppingBag className="w-4 h-4 mr-2" />
+                            Editar Historial
+                        </Button>
                         <Button onClick={cerrarCaja} variant="primary">
                             <DollarSign className="w-4 h-4 mr-2" />
                             Cerrar Caja
@@ -539,6 +545,12 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
+                <VentasHistoryModal
+                    isOpen={showModalHistory}
+                    onClose={() => setShowModalHistory(false)}
+                    onVentaUpdated={cargarDatos}
+                />
             </div>
         </Layout>
     );

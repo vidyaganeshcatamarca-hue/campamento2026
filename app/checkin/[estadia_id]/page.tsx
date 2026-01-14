@@ -612,20 +612,27 @@ export default function CheckInPage() {
 
                                 <MapaParcelas
                                     // Fix: Use 'parcelas' prop instead of legacy ocupadas/reservadas
+                                    // Fix: Support alphanumeric IDs
                                     parcelas={parcelasDisponibles.map(p => ({
-                                        id: parseInt(p.nombre_parcela.replace(/\D/g, '')) || 0,
+                                        id: p.nombre_parcela, // Nam as ID
                                         nombre: p.nombre_parcela,
                                         estado: p.estado as 'ocupada' | 'libre' | 'reservada',
                                         pos_x: p.pos_x,
                                         pos_y: p.pos_y
-                                    })).filter(p => p.id > 0)}
+                                    }))}
+                                    detalles={parcelasDisponibles.reduce((acc, p) => {
+                                        if (p.responsable_nombre) {
+                                            acc[p.nombre_parcela] = p.responsable_nombre;
+                                        }
+                                        return acc;
+                                    }, {} as Record<string, string>)}
                                     seleccionadas={parcelasSeleccionadas.map(pid => {
                                         const p = parcelasDisponibles.find(pd => pd.id === pid);
-                                        return p ? parseInt(p.nombre_parcela.replace(/\D/g, '')) : 0;
-                                    }).filter(n => n > 0)}
+                                        return p ? p.nombre_parcela : '';
+                                    }).filter(n => n !== '')}
                                     onSelect={(id) => {
-                                        // Buscar parcela por ID numérico en el nombre
-                                        const parcela = parcelasDisponibles.find(p => parseInt(p.nombre_parcela.replace(/\D/g, '')) === id);
+                                        // Buscar parcela por nombre exacto (id es string ahora)
+                                        const parcela = parcelasDisponibles.find(p => p.nombre_parcela === id);
                                         if (parcela) {
                                             // Bug L Fix: Asegurar propagación & Bug P: Custom Dialog
                                             if (parcela.estado === 'ocupada' && !parcelasSeleccionadas.includes(parcela.id)) {
