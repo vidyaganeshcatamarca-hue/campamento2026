@@ -874,7 +874,7 @@ export default function OcupacionPage() {
                         <div className="border-b bg-gray-50/50 p-4 max-h-[400px] overflow-y-auto">
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {parcelas
-                                    .filter(p => !p.nombre_parcela.toLowerCase().includes('cama')) // Show only camping parcels
+                                    .filter(p => !p.nombre_parcela.toLowerCase().includes('cama') && p.estado === 'ocupada') // Show only occupied camping parcels
                                     .sort((a, b) => {
                                         const numA = parseInt(a.nombre_parcela.replace(/\D/g, '')) || 0;
                                         const numB = parseInt(b.nombre_parcela.replace(/\D/g, '')) || 0;
@@ -887,8 +887,8 @@ export default function OcupacionPage() {
                                                 <Badge
                                                     variant="outline"
                                                     className={`text-[10px] uppercase border ${p.estado === 'ocupada' ? 'bg-red-100 text-red-700 border-red-200' :
-                                                            p.estado === 'reservada' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                                                'bg-green-100 text-green-700 border-green-200'
+                                                        p.estado === 'reservada' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                                            'bg-green-100 text-green-700 border-green-200'
                                                         }`}
                                                 >
                                                     {p.estado}
