@@ -402,16 +402,51 @@ export default function LiquidacionPage() {
         getNoonDate(vistaEstadia.fecha_ingreso)
     )) : 1;
 
-    const calcCamping = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona : 0;
-    const calcParcelas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela : 0;
-    const calcCamas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_camas || 0) * vistaEstadia.p_cama : 0;
-    const calcSillas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
-    const calcMesas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
+    // FIX: Using 'es_habitacion' flag from View to switch calculation mode
+    const isHabitacion = vistaEstadia?.es_habitacion || false;
+
+    // Calc Logic:
+    // If Room: (Nights * People * Price_Bed)
+    // If Camping: (Nights * People * Price_Person) + (Days * Tents * Price_Tent)
+
+    const calcCamas = isHabitacion && vistaEstadia
+        ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_cama
+        : 0;
+
+    const calcCamping = !isHabitacion && vistaEstadia
+        ? (vistaEstadia.acumulado_noches_persona || 0) * vistaEstadia.p_persona
+        : 0;
+
+    const calcParcelas = !isHabitacion && vistaEstadia
+        ? diasEstadiaReal * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela
+        : 0;
+
+    const calcSillas = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
+    const calcMesas = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
     const calcVehiculo = vistaEstadia ? diasEstadiaReal * vistaEstadia.p_vehiculo : 0;
+    // Wait, original logic in view was: accumulated_nights * (sillas * p_silla). It assumes cost per night per chair? 
+    // Let's stick to View Logic: (COALESCE(acumulado_noches_persona, 0) * ((COALESCE(cant_sillas_total, 0) * p_silla) + ...))
 
-    const totalCalculado = calcCamping + calcParcelas + calcCamas + calcSillas + calcMesas + calcVehiculo;
+    const extrasBase = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) : 0;
+    const calcExtras = vistaEstadia ? extrasBase * (
+        ((vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla) +
+        ((vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa) +
+        vistaEstadia.p_vehiculo
+    ) : 0;
 
-    // Usar totalCalculado para Individual, totalGrupal para Grupal
+    // Recalculate granular for display (optional, but keep total consistent)
+    // Actually, let's just use the View's total if possible, or replicate exactly.
+    // The View does: (Base Stay) + (Extras).
+    // Base Stay = Room ? (nights * p_cama) : (nights * p_persona + nights * props_parcela * p_parcela) -> Wait, view does: accumulated * parcelas * p_parcela?
+    // View Line 59: (COALESCE(acumulado_noches_persona, 0) * COALESCE(cant_parcelas_total, 0) * p_parcela)
+    // So YES, Parcela is charged PER PERSON NIGHT? No, accumulated_nights_person is "Days * People". 
+    // If 2 people, 2 days = 4 accumulated. 
+    // If 1 tent. Cost = 4 * 1 * Price? That means Price is per person per tent per day? Unlikely.
+    // Standard camping: Price Person/Day + Price Tent/Day.
+    // View logic seems to multiply everything by accumulated_nights_person. This might be a bug in View too if Parcela is per Tent/Day not Person/Day.
+    // BUT, for now, let's MATCH THE VIEW EXACTLY to resolve the User's "Wrong Price" issue which is Room vs Person.
+
+    const totalCalculado = calcCamas + calcCamping + calcParcelas + calcExtras;
     const subtotal = tipoCobro === 'grupal' ? totalGrupal : totalCalculado;
 
     // BUG N FIX: Forzar enteros en cálculos finales
@@ -608,10 +643,10 @@ export default function LiquidacionPage() {
                         </div>
 
                         {/* Personas en camping */}
-                        {(vistaEstadia.acumulado_noches_persona || 0) > 0 && (vistaEstadia.cant_parcelas_camping || 0) > 0 && (
+                        {!isHabitacion && (vistaEstadia?.acumulado_noches_persona || 0) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted">
-                                    Personas (camping): {vistaEstadia.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia.p_persona)}
+                                    Personas (camping): {vistaEstadia?.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia?.p_persona || 0)}
                                 </span>
                                 <span className="font-medium">
                                     {formatCurrency(calcCamping)}
@@ -620,10 +655,10 @@ export default function LiquidacionPage() {
                         )}
 
                         {/* Parcelas de camping */}
-                        {(vistaEstadia.cant_parcelas_camping || 0) > 0 && (
+                        {!isHabitacion && (vistaEstadia?.cant_parcelas_camping || 0) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted">
-                                    Parcelas: {diasEstadiaReal} días × {vistaEstadia.cant_parcelas_camping} × {formatCurrency(vistaEstadia.p_parcela)}
+                                    Parcelas: {vistaEstadia?.acumulado_noches_persona} × {vistaEstadia?.cant_parcelas_camping} × {formatCurrency(vistaEstadia?.p_parcela || 0)}
                                 </span>
                                 <span className="font-medium">
                                     {formatCurrency(calcParcelas)}
@@ -632,12 +667,12 @@ export default function LiquidacionPage() {
                         )}
 
                         {/* Camas de habitación */}
-                        {(vistaEstadia.cant_camas || 0) > 0 && (
-                            <div className="flex justify-between">
-                                <span className="text-muted">
-                                    Camas (habitación): {diasEstadiaReal} días × {vistaEstadia.cant_camas} × {formatCurrency(vistaEstadia.p_cama)}
+                        {isHabitacion && (
+                            <div className="flex justify-between bg-blue-50 p-1 rounded">
+                                <span className="text-blue-800 font-medium">
+                                    Habitación Compartida: {vistaEstadia?.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia?.p_cama || 0)}
                                 </span>
-                                <span className="font-medium text-accent">
+                                <span className="font-bold text-blue-900">
                                     {formatCurrency(calcCamas)}
                                 </span>
                             </div>
