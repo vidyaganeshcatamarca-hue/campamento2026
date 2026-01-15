@@ -39,13 +39,14 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
 
             let query = supabase
                 .from('kiosco_ventas')
-                .select('*, kiosco_productos(nombre)')
+                // Use explicit left join to ensure we get sales even if product was deleted
+                .select('*, kiosco_productos!left(nombre)')
                 .gte('fecha', desde)
                 .lte('fecha', hasta)
                 .order('fecha', { ascending: false });
 
             const { data, error } = await query;
-            console.log("Kiosk Ventas Fetched:", data?.length);
+            console.log("Kiosk Ventas Fetched:", data?.length, "Params:", desde, hasta);
 
             if (error) throw error;
             setVentas(data || []);

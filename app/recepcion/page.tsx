@@ -84,12 +84,14 @@ export default function RecepcionPage() {
 
     const handleCheckIn = (arribo: ArriboWithEstadia) => {
         // Redirigir siempre a Check-in si hay estadia_id
-        if (arribo.estadia_id) {
-            console.log('Redirigiendo a checkin:', arribo.estadia_id);
-            router.push(`/checkin/${arribo.estadia_id}`);
+        const targetId = arribo.estadia_id || arribo.estadia?.id;
+
+        if (targetId) {
+            console.log('Redirigiendo a checkin:', targetId);
+            router.push(`/checkin/${targetId}`);
         } else {
-            // If no estadia_id (should not happen for 'pending' items usually, unless legacy), prompt or error
-            toast.error('Error: Este arribo no tiene estadía asignada. Contacte soporte.');
+            console.error('Arribo sin ID:', arribo);
+            toast.error(`Error: No se encontró estadía para ${arribo.nombre_completo}. ID: ${arribo.id}`);
         }
     };
 

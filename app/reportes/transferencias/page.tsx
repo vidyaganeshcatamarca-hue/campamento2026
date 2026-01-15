@@ -49,7 +49,8 @@ export default function ReporteTransferenciasPage() {
                     estadia_id, 
                     recibo_emitido
                 `)
-                .eq('metodo_pago', 'transferencia');
+                // Fix: Search for both common casings or use ilike if possible, but distinct values usually 'Transferencia'
+                .ilike('metodo_pago', 'transferencia');
 
             if (fechaDesde) query = query.gte('fecha_pago', fechaDesde + ' 00:00:00');
             if (fechaHasta) query = query.lte('fecha_pago', fechaHasta + ' 23:59:59');
