@@ -46,21 +46,23 @@ export default function RecepcionPage() {
             const { data: acampantesData, error: acampantesError } = await supabase
                 .from('acampantes')
                 .select('*')
-                .in('estadia_id', estadiaIds)
                 .in('estadia_id', estadiaIds);
 
             if (acampantesError) throw acampantesError;
 
-            // Combinar datos
-            const arribosCombinados = (acampantesData || []).map(acampante => ({
-                ...acampante,
-                estadia: estadiasData.find(e => e.id === acampante.estadia_id),
-            }));
+            // Combinar datos - ENSURE estadia_id is present
+            const arribosCombinados = (acampantesData || []).map(acampante => {
+                const estadiaMatch = estadiasData.find(e => e.id === acampante.estadia_id);
+                console.log(`Acampante ${acampante.nombre_completo}: estadia_id=${acampante.estadia_id}, matched=${!!estadiaMatch}`);
+                return {
+                    ...acampante,
+                    estadia: estadiaMatch,
+                };
+            });
 
             setArribos(arribosCombinados);
         } catch (error) {
             console.error('Error al cargar arribos:', error);
-            console.log('Error al cargar datos:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);

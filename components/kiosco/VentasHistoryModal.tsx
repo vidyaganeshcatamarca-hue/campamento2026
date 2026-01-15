@@ -37,22 +37,45 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
             const desde = new Date(fechaDesde + 'T00:00:00').toISOString();
             const hasta = new Date(fechaHasta + 'T23:59:59').toISOString();
 
-            let query = supabase
+            console.log("Fetching kiosk ventas:", { desde, hasta });
+
+            // Simplified query - fetch all sales first
+            const { data, error } = await supabase
                 .from('kiosco_ventas')
-                // Use explicit left join to ensure we get sales even if product was deleted
-                .select('*, kiosco_productos!left(nombre)')
+                .select('*')
                 .gte('fecha', desde)
                 .lte('fecha', hasta)
                 .order('fecha', { ascending: false });
 
-            const { data, error } = await query;
-            console.log("Kiosk Ventas Fetched:", data?.length, "Params:", desde, hasta);
+            console.log("Kiosk Ventas Raw:", data?.length, "Error:", error);
 
-            if (error) throw error;
-            setVentas(data || []);
+            if (error) {
+                console.error("Supabase error:", error);
+                throw error;
+            }
+
+            // Fetch product names separately to avoid join issues
+            if (data && data.length > 0) {
+                const productIds = [...new Set(data.map(v => v.producto_id).filter(Boolean))];
+                const { data: productos } = await supabase
+                    .from('kiosco_productos')
+                    .select('id, nombre')
+                    .in('id', productIds);
+
+                const productMap = new Map(productos?.map(p => [p.id, p.nombre]) || []);
+
+                const enrichedData = data.map(venta => ({
+                    ...venta,
+                    kiosco_productos: { nombre: productMap.get(venta.producto_id) || 'Producto Eliminado' }
+                }));
+
+                setVentas(enrichedData);
+            } else {
+                setVentas([]);
+            }
         } catch (error) {
-            console.error(error);
-            toast.error('Error cargando historial');
+            console.error("Fetch error:", error);
+            toast.error('Error cargando historial: ' + (error as any).message);
         } finally {
             setLoading(false);
         }
