@@ -81,59 +81,77 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     };
 
     const handleSubmit = async () => {
+        console.log("Submit presionado");
         if (!fechaEgreso) {
             toast.error('Ingrese fecha de egreso');
             return;
         }
+        if (!celular) {
+            toast.error('Error: Celular no encontrado');
+            return;
+        }
+
         setLoading(true);
         try {
-            // 1. Create New Estadia (Pending Confirmation)
+            console.log("Creando estadía...");
+            // 1. Create New Estadia
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
                     celular_responsable: celular,
-                    fecha_ingreso: new Date(fechaIngreso + 'T12:00:00').toISOString(), // Noon to avoid timezone issues
+                    fecha_ingreso: new Date(fechaIngreso + 'T12:00:00').toISOString(),
                     fecha_egreso_programada: new Date(fechaEgreso + 'T12:00:00').toISOString(),
-                    cant_personas_total: cantPersonas,
-                    estado_estadia: 'activa', // Activa but unconfirmed logic usually handled by ingres_confirmado=false
-                    ingreso_confirmado: false, // Will be confirmed in Check-in
+                    cant_personas_total: cantPersonas || 1,
+                    estado_estadia: 'activa',
+                    ingreso_confirmado: false, // Pending check-in
                     observaciones: 'Reingreso (Antiguo Acampante)'
                 })
                 .select()
                 .single();
 
-            if (estError) throw estError;
+            if (estError) {
+                console.error("Error creating estadia:", estError);
+                throw estError;
+            }
+            if (!estadia) throw new Error("No se pudo crear la estadía (datos nulos)");
 
-            // 2. Create Acampante Record linked to new Estadia
+            console.log("Estadía creada:", estadia.id);
+
+            // 2. Create Acampante Record
             const { error: acampError } = await supabase
                 .from('acampantes')
                 .insert({
                     estadia_id: estadia.id,
                     celular: celular,
-                    nombre_completo: formData.nombre_completo,
+                    nombre_completo: formData.nombre_completo || 'Sin Nombre',
                     dni: formData.dni,
                     email: formData.email,
                     domicilio: formData.domicilio,
                     localidad: formData.localidad,
                     provincia: formData.provincia,
                     pais: formData.pais,
-                    es_persona_riesgo: formData.es_persona_riesgo,
+                    es_persona_riesgo: formData.es_persona_riesgo || false,
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion,
-                    es_responsable_pago: true // Usually the one re-entering is responsible
+                    es_responsable_pago: true
                 });
 
-            if (acampError) throw acampError;
+            if (acampError) {
+                console.error("Error creating acampante:", acampError);
+                throw acampError;
+            }
 
-            toast.success('Reingreso iniciado. Redirigiendo a Check-in...');
+            toast.success('Reingreso iniciado. Redirigiendo...');
 
-            // 3. Redirect to Check-in
-            onClose();
-            router.push(`/checkin/${estadia.id}`);
+            // Short delay to ensure toast is seen and state propagates
+            setTimeout(() => {
+                onClose();
+                router.push(`/checkin/${estadia.id}`);
+            }, 500);
 
         } catch (error: any) {
-            console.error(error);
-            toast.error('Error al procesar reingreso: ' + error.message);
+            console.error("Catch Error:", error);
+            toast.error('Error al procesar reingreso: ' + (error.message || 'Desconocido'));
         } finally {
             setLoading(false);
         }

@@ -13,6 +13,7 @@ import Cookies from 'js-cookie';
 import { ReingresoModal } from '@/components/ocupacion/ReingresoModal';
 
 interface ParcelaConEstadia {
+    id: number; // Added ID
     nombre_parcela: string;
     estado: string;
     estadia_nombre?: string;
@@ -74,6 +75,10 @@ export default function OcupacionPage() {
     // List View State
     const [showList, setShowList] = useState(false);
 
+    // Reservas Modal State
+    const [showReservasModal, setShowReservasModal] = useState(false);
+    const [reservaParcela, setReservaParcela] = useState<{ id: number; nombre: string } | null>(null);
+
     // Egresos
     const [modoFecha, setModoFecha] = useState<'unica' | 'rango'>('unica');
     const [fechaEgreso, setFechaEgreso] = useState('');
@@ -124,8 +129,8 @@ export default function OcupacionPage() {
             console.log('[Ocupacion] Solicitando parcelas...');
             const parcelasPromise = supabase
                 .from('parcelas')
-                // Add pos_x, pos_y to query
-                .select('nombre_parcela, estado, estadia_id, cantidad_integrantes, pos_x, pos_y')
+                // Add id, pos_x, pos_y to query
+                .select('id, nombre_parcela, estado, estadia_id, cantidad_integrantes, pos_x, pos_y')
                 .order('nombre_parcela');
 
             const { data: parcelasData, error: errParcelas } = await Promise.race([
@@ -214,6 +219,7 @@ export default function OcupacionPage() {
                     const mainName = acampantesMap[principal.id]?.[0] || principal.celular_responsable;
 
                     return {
+                        id: parcela.id,
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
                         estadia_nombre: mainName, // NOW SHOWING NAME NOT PHONE
@@ -227,6 +233,7 @@ export default function OcupacionPage() {
                     };
                 } else {
                     return {
+                        id: parcela.id,
                         nombre_parcela: parcela.nombre_parcela,
                         estado: parcela.estado || 'libre',
                         estadia_nombre: parcela.estado === 'ocupada' ? 'Ocupada' : undefined,
@@ -849,8 +856,23 @@ export default function OcupacionPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {camasHabitacion.map(cama => (
                                         <div key={cama.nombre_parcela} className="p-4 border rounded-lg relative">
-                                            <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} />
-                                            <h3 className="font-bold">{cama.nombre_parcela}</h3>
+                                            <div className="absolute top-3 right-3 flex gap-2 items-center">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 z-10"
+                                                    title="Gestionar Reservas"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setReservaParcela({ id: cama.id, nombre: cama.nombre_parcela });
+                                                        setShowReservasModal(true);
+                                                    }}
+                                                >
+                                                    <Calendar className="w-4 h-4 text-blue-500" />
+                                                </Button>
+                                                <div className={`w-3 h-3 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} />
+                                            </div>
+                                            <h3 className="font-bold pr-8">{cama.nombre_parcela}</h3>
                                             {cama.estado === 'ocupada' ? (
                                                 <>
                                                     <p className="text-xs text-muted truncate">{cama.estadia_nombre}</p>

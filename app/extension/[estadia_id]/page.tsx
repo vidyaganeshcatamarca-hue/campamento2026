@@ -83,13 +83,18 @@ export default function ExtensionPage() {
 
         if (diasAdicionales <= 0) return { diasAdicionales: 0, costoExtension: 0, costoDiarioTotal: 0, puedeExtender: false };
 
-        // 1. Costo Persona Diario
-        const costoPersonaDiario = (estadia.cant_camas > 0)
+        // 1. Detectar si es Habitación (Check deeper logic)
+        // La vista puede fallar en cant_camas si la relacion no es estricta, asi que chequeamos el nombre de la parcela asignada
+        const assignedName = (estadia.parcela_asignada || '').toLowerCase();
+        const isHabitacionName = assignedName.includes('cama') || assignedName.includes('habitacion') || assignedName.includes('habitación');
+        const isHabitacion = estadia.cant_camas > 0 || (estadia as any).es_habitacion || isHabitacionName;
+
+        // 2. Costo Persona Diario
+        const costoPersonaDiario = isHabitacion
             ? (estadia.cant_personas_total || 0) * estadia.p_cama
             : (estadia.cant_personas_total || 0) * estadia.p_persona;
 
-        // 2. Costo Parcela/Recursos Diario
-        const isHabitacion = estadia.cant_camas > 0 || (estadia as any).es_habitacion;
+        // 3. Costo Parcela/Recursos Diario
         const costoParcelaDiario = isHabitacion
             ? 0 // Las habitaciones no cobran costo de parcela aparte
             : (estadia.cant_parcelas_total || 0) * estadia.p_parcela;

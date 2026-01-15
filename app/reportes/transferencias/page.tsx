@@ -50,31 +50,39 @@ export default function ReporteTransferenciasPage() {
 
             // Enriquecer con datos del responsable
             const pagosEnriquecidos = await Promise.all(pagosData.map(async (pago) => {
-                // Obtener TODOS los acampantes de la estadía para encontrar el mejor candidato
-                // Verify pago.estadia_id exists
                 if (!pago.estadia_id) return { ...pago, responsable_nombre: 'Sin Estadía', responsable_dni: '-', responsable_celular: '-' };
 
-                const { data: acampantes, error: acampError } = await supabase
+                // 1. Intentar buscar acampantes
+                const { data: acampantes } = await supabase
                     .from('acampantes')
                     .select('nombre_completo, dni, celular, es_responsable_pago')
                     .eq('estadia_id', pago.estadia_id);
-
-                if (acampError) console.error('Error fetching acampantes for estadia', pago.estadia_id, acampError);
 
                 let nombre = 'Desconocido';
                 let dni = '-';
                 let celular = '-';
 
                 if (acampantes && acampantes.length > 0) {
-                    // Prioridad 1: Responsable de pago marcado
                     const responsable = acampantes.find(a => a.es_responsable_pago);
-
-                    // Prioridad 2: El primer acampante de la lista (si no hay responsable marcado)
                     const candidato = responsable || acampantes[0];
-
-                    nombre = candidato.nombre_completo;
+                    nombre = candidato.nombre_completo || 'Sin Nombre';
                     dni = candidato.dni || '-';
                     celular = candidato.celular || '-';
+                } else {
+                    // 2. Fallback: Buscar datos en la estadía misma (si existen snapshot)
+                    const { data: estadia } = await supabase
+                        .from('estadias')
+                        .select('celular_responsable, observaciones')
+                        .eq('id', pago.estadia_id)
+                        .single();
+
+                    if (estadia) {
+                        celular = estadia.celular_responsable || '-';
+                        // Intentar extraer nombre de observaciones si es formato "Backup: Nombre"
+                        if (estadia.observaciones && estadia.observaciones.includes('Nombre:')) {
+                            nombre = estadia.observaciones.split('Nombre:')[1]?.split('\n')[0]?.trim() || 'Desconocido';
+                        }
+                    }
                 }
 
                 return {
@@ -82,7 +90,7 @@ export default function ReporteTransferenciasPage() {
                     responsable_nombre: nombre,
                     responsable_dni: dni,
                     responsable_celular: celular,
-                    recibo_emitido: pago.recibo_emitido || false // Default false
+                    recibo_emitido: pago.recibo_emitido || false
                 };
             }));
 
