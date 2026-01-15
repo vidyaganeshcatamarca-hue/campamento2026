@@ -45,6 +45,7 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
                 .order('fecha', { ascending: false });
 
             const { data, error } = await query;
+            console.log("Kiosk Ventas Fetched:", data?.length);
 
             if (error) throw error;
             setVentas(data || []);

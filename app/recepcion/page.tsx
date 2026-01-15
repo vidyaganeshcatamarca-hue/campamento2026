@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ArriboCard } from '@/components/recepcion/ArriboCard';
 import { RegistroManualForm } from '@/components/recepcion/RegistroManualForm';
 import { RefreshCw, UserPlus, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ArriboWithEstadia extends Acampante {
     estadia?: Estadia;
@@ -81,14 +82,14 @@ export default function RecepcionPage() {
         );
     }, [arribos, searchQuery]);
 
-    const handleArriboClick = (arribo: ArriboWithEstadia) => {
-        // Fallback to direct ID if joined object is missing
-        const targetId = arribo.estadia?.id || arribo.estadia_id;
-
-        if (targetId) {
-            router.push(`/checkin/${targetId}`);
+    const handleCheckIn = (arribo: ArriboWithEstadia) => {
+        // Redirigir siempre a Check-in si hay estadia_id
+        if (arribo.estadia_id) {
+            console.log('Redirigiendo a checkin:', arribo.estadia_id);
+            router.push(`/checkin/${arribo.estadia_id}`);
         } else {
-            console.error('Arribo sin ID de estadía:', arribo);
+            // If no estadia_id (should not happen for 'pending' items usually, unless legacy), prompt or error
+            toast.error('Error: Este arribo no tiene estadía asignada. Contacte soporte.');
         }
     };
 
@@ -172,7 +173,7 @@ export default function RecepcionPage() {
                             <ArriboCard
                                 key={arribo.celular}
                                 acampante={arribo}
-                                onClick={() => handleArriboClick(arribo)}
+                                onClick={() => handleCheckIn(arribo)}
                             />
                         ))}
                     </div>

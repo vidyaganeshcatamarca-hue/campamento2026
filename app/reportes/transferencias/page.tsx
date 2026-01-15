@@ -38,25 +38,47 @@ export default function ReporteTransferenciasPage() {
             const desde = new Date(fechaDesde + 'T00:00:00').toISOString();
             const hasta = new Date(fechaHasta + 'T23:59:59').toISOString();
 
-            const { data: pagosData, error: pagosError } = await supabase
+            // 2. Fetch Data
+            let query = supabase
                 .from('pagos')
-                .select('*') // Includes recibo_emitido
-                .eq('metodo_pago', 'Transferencia')
-                .gte('fecha_pago', desde)
-                .lte('fecha_pago', hasta)
-                .order('fecha_pago', { ascending: false });
+                .select(`
+                    id,
+                    monto_abonado,
+                    fecha_pago,
+                    metodo_pago,
+                    estadia_id, 
+                    recibo_emitido
+                `)
+                .eq('metodo_pago', 'transferencia');
+
+            if (fechaDesde) query = query.gte('fecha_pago', fechaDesde + ' 00:00:00');
+            if (fechaHasta) query = query.lte('fecha_pago', fechaHasta + ' 23:59:59');
+
+            const { data: pagosData, error: pagosError } = await query;
 
             if (pagosError) throw pagosError;
+            if (!pagosData) {
+                setPagos([]);
+                return;
+            }
+
+            console.log("Pagos fetched:", pagosData.length);
 
             // Enriquecer con datos del responsable
             const pagosEnriquecidos = await Promise.all(pagosData.map(async (pago) => {
-                if (!pago.estadia_id) return { ...pago, responsable_nombre: 'Sin Estadía', responsable_dni: '-', responsable_celular: '-' };
+                // Verify pago.estadia_id exists
+                if (!pago.estadia_id) {
+                    console.warn(`Pago ${pago.id} no tiene estadia_id`);
+                    return { ...pago, responsable_nombre: 'Sin Estadía (Huérfano)', responsable_dni: '-', responsable_celular: '-' };
+                }
 
                 // 1. Intentar buscar acampantes
-                const { data: acampantes } = await supabase
+                const { data: acampantes, error: errAcamp } = await supabase
                     .from('acampantes')
                     .select('nombre_completo, dni, celular, es_responsable_pago')
                     .eq('estadia_id', pago.estadia_id);
+
+                if (errAcamp) console.error("Error fetching acampantes:", errAcamp);
 
                 let nombre = 'Desconocido';
                 let dni = '-';
@@ -69,7 +91,8 @@ export default function ReporteTransferenciasPage() {
                     dni = candidato.dni || '-';
                     celular = candidato.celular || '-';
                 } else {
-                    // 2. Fallback: Buscar datos en la estadía misma (si existen snapshot)
+                    // 2. Fallback: Buscar datos en la estadía misma
+                    console.log(`Fallback Estadia para Pago ${pago.id} (Estadia ${pago.estadia_id})`);
                     const { data: estadia } = await supabase
                         .from('estadias')
                         .select('celular_responsable, observaciones')
@@ -78,10 +101,11 @@ export default function ReporteTransferenciasPage() {
 
                     if (estadia) {
                         celular = estadia.celular_responsable || '-';
-                        // Intentar extraer nombre de observaciones si es formato "Backup: Nombre"
                         if (estadia.observaciones && estadia.observaciones.includes('Nombre:')) {
-                            nombre = estadia.observaciones.split('Nombre:')[1]?.split('\n')[0]?.trim() || 'Desconocido';
+                            nombre = estadia.observaciones.split('Nombre:')[1]?.split('\n')[0]?.trim() || 'Desconocido (Obs)';
                         }
+                    } else {
+                        console.warn(`Estadia ${pago.estadia_id} no encontrada en tabla estadias`);
                     }
                 }
 

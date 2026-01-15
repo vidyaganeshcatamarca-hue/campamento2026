@@ -851,38 +851,49 @@ export default function OcupacionPage() {
                 {
                     camasTotales > 0 && (
                         <Card>
-                            <CardHeader><CardTitle>Habitación Compartida ({camasOcupadas}/{camasTotales})</CardTitle></CardHeader>
+                            <CardHeader className="flex flex-row justify-between items-center">
+                                <CardTitle>Habitación Compartida ({camasOcupadas}/{camasTotales})</CardTitle>
+                                {/* Global button if needed, but per-bed is better. Let's make per-bed clearer. */}
+                            </CardHeader>
                             <CardContent>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {camasHabitacion.map(cama => (
-                                        <div key={cama.nombre_parcela} className="p-4 border rounded-lg relative">
-                                            <div className="absolute top-3 right-3 flex gap-2 items-center">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6 z-10"
-                                                    title="Gestionar Reservas"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setReservaParcela({ id: cama.id, nombre: cama.nombre_parcela });
-                                                        setShowReservasModal(true);
-                                                    }}
-                                                >
-                                                    <Calendar className="w-4 h-4 text-blue-500" />
-                                                </Button>
-                                                <div className={`w-3 h-3 rounded-full ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} />
+                                        <div key={cama.nombre_parcela} className="p-4 border rounded-lg relative bg-white shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h3 className="font-bold text-lg">{cama.nombre_parcela}</h3>
+                                                <div className={`w-3 h-3 rounded-full mt-1.5 ${cama.estado === 'ocupada' ? 'bg-red-500' : 'bg-green-500'}`} title={cama.estado} />
                                             </div>
-                                            <h3 className="font-bold pr-8">{cama.nombre_parcela}</h3>
-                                            {cama.estado === 'ocupada' ? (
-                                                <>
-                                                    <p className="text-xs text-muted truncate">{cama.estadia_nombre}</p>
-                                                    {!isReadOnly && (
-                                                        <Button variant="outline" size="xs" className="mt-2 w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>Mudar</Button>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <p className="text-xs text-green-600 font-medium mt-1">Disponible</p>
-                                            )}
+
+                                            <div className="mb-3">
+                                                {cama.estado === 'ocupada' ? (
+                                                    <>
+                                                        <p className="text-sm font-medium text-gray-800 truncate mb-1" title={cama.estadia_nombre}>
+                                                            {cama.estadia_nombre}
+                                                        </p>
+                                                        {!isReadOnly && (
+                                                            <Button variant="outline" size="xs" className="w-full text-xs h-7" onClick={() => setParcelaSeleccionada(cama)}>
+                                                                Mudar
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <p className="text-sm text-green-600 font-medium">Disponible</p>
+                                                )}
+                                            </div>
+
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                className="w-full text-xs flex items-center justify-center gap-2"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setReservaParcela({ id: cama.id, nombre: cama.nombre_parcela });
+                                                    setShowReservasModal(true);
+                                                }}
+                                            >
+                                                <Calendar className="w-3 h-3" />
+                                                Reservar / Ver
+                                            </Button>
                                         </div>
                                     ))}
                                 </div>
