@@ -312,15 +312,22 @@ export default function OcupacionPage() {
                 // Fetch Name - CORRECTED: Fetch by estadia_id to get actual occupant(s)
                 // Since an estadia represents a group, we might have multiple people.
                 // But typically if it's listed individually in 'estadias' table by ID, we want the people associated.
-                const { data: acampantesData } = await supabase
+                const { data: acampantesData, error: acampError } = await supabase
                     .from('acampantes')
                     .select('nombre_completo')
                     .eq('estadia_id', estadia.id); // Specific to this stay ID
 
+                if (acampError) console.error("Error fetching acampantes for egreso:", estadia.id, acampError);
+
+                // Debug log for first item to see what's happening
+                if (estadiasData.indexOf(estadia) === 0) {
+                    console.log(`[Debug Egresos] Estadia: ${estadia.id} (${estadia.celular_responsable}) -> Acampantes found: ${acampantesData?.length}`);
+                }
+
                 // If multiple names, join them. If strict 1-1, it will be one.
-                const resolvedName = acampantesData
-                    ? acampantesData.map((a: any) => a.nombre_completo).join(', ')
-                    : 'Sin Nombre';
+                const resolvedName = acampantesData && acampantesData.length > 0
+                    ? acampantesData.map((a: any) => a.nombre_completo || 'Sin Nombre (Null)').join(', ')
+                    : ''; // Empty string will trigger fallback if we had one, or default to 'Sin Nombre' below
 
                 egresosInfo.push({
                     responsable: estadia.celular_responsable,
