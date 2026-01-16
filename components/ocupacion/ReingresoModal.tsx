@@ -117,28 +117,56 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             console.log("Estadía creada:", estadia.id);
 
-            // 2. Create Acampante Record
-            const { error: acampError } = await supabase
-                .from('acampantes')
-                .insert({
-                    estadia_id: estadia.id,
-                    celular: celular,
-                    nombre_completo: formData.nombre_completo || 'Sin Nombre',
-                    dni: formData.dni,
-                    email: formData.email,
-                    domicilio: formData.domicilio,
-                    localidad: formData.localidad,
-                    provincia: formData.provincia,
-                    pais: formData.pais,
-                    es_persona_riesgo: formData.es_persona_riesgo || false,
-                    enfermedades: formData.enfermedades,
-                    medicacion: formData.medicacion,
-                    es_responsable_pago: true
-                });
+            // 2. Update Existing Acampante Record
+            // Instead of creating a new one, we move the existing camper to the new stay
+            if (foundCamper && foundCamper.id) {
+                const { error: updateError } = await supabase
+                    .from('acampantes')
+                    .update({
+                        estadia_id: estadia.id,
+                        es_responsable_pago: true, // They initiate the stay, so they are responsible
+                        // Update fields just in case they changed in the form
+                        nombre_completo: formData.nombre_completo,
+                        dni: formData.dni,
+                        email: formData.email,
+                        domicilio: formData.domicilio,
+                        localidad: formData.localidad,
+                        provincia: formData.provincia,
+                        pais: formData.pais,
+                        es_persona_riesgo: formData.es_persona_riesgo,
+                        enfermedades: formData.enfermedades,
+                        medicacion: formData.medicacion
+                    })
+                    .eq('id', foundCamper.id);
 
-            if (acampError) {
-                console.error("Error creating acampante:", acampError);
-                throw acampError;
+                if (updateError) {
+                    console.error("Error updating acampante:", updateError);
+                    throw updateError;
+                }
+            } else {
+                // Fallback: This shouldn't happen given the search logic, but safe to keep
+                const { error: acampError } = await supabase
+                    .from('acampantes')
+                    .insert({
+                        estadia_id: estadia.id,
+                        celular: celular,
+                        nombre_completo: formData.nombre_completo || 'Sin Nombre',
+                        dni: formData.dni,
+                        email: formData.email,
+                        domicilio: formData.domicilio,
+                        localidad: formData.localidad,
+                        provincia: formData.provincia,
+                        pais: formData.pais,
+                        es_persona_riesgo: formData.es_persona_riesgo || false,
+                        enfermedades: formData.enfermedades,
+                        medicacion: formData.medicacion,
+                        es_responsable_pago: true
+                    });
+
+                if (acampError) {
+                    console.error("Error creating acampante:", acampError);
+                    throw acampError;
+                }
             }
 
             toast.success('Reingreso iniciado. Redirigiendo...');
