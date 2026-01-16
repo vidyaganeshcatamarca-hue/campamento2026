@@ -289,6 +289,31 @@ export default function OcupacionPage() {
                 .gte('fecha_egreso_programada', fechaInicio)
                 .lte('fecha_egreso_programada', fechaFin);
 
+            // 2. Batch Fetch Acampantes for these stays
+            const estadiaIds = estadiasData?.map(e => e.id) || [];
+            let acampantesMap: Record<string, string[]> = {};
+
+            if (estadiaIds.length > 0) {
+                const { data: allAcampantes, error: acampError } = await supabase
+                    .from('acampantes')
+                    .select('estadia_id, nombre_completo')
+                    .in('estadia_id', estadiaIds);
+
+                if (acampError) {
+                    console.error("Error batch fetching acampantes for egresos:", acampError);
+                } else {
+                    // Group by estadia_id
+                    allAcampantes?.forEach(a => {
+                        if (!acampantesMap[a.estadia_id]) {
+                            acampantesMap[a.estadia_id] = [];
+                        }
+                        if (a.nombre_completo) {
+                            acampantesMap[a.estadia_id].push(a.nombre_completo);
+                        }
+                    });
+                }
+            }
+
             const egresosInfo: EgresoInfo[] = [];
 
             for (const estadia of estadiasData || []) {
@@ -309,29 +334,13 @@ export default function OcupacionPage() {
                     }
                 }
 
-                // Fetch Name - CORRECTED: Fetch by estadia_id to get actual occupant(s)
-                // Since an estadia represents a group, we might have multiple people.
-                // But typically if it's listed individually in 'estadias' table by ID, we want the people associated.
-                const { data: acampantesData, error: acampError } = await supabase
-                    .from('acampantes')
-                    .select('nombre_completo')
-                    .eq('estadia_id', estadia.id); // Specific to this stay ID
-
-                if (acampError) console.error("Error fetching acampantes for egreso:", estadia.id, acampError);
-
-                // Debug log for first item to see what's happening
-                if (estadiasData.indexOf(estadia) === 0) {
-                    console.log(`[Debug Egresos] Estadia: ${estadia.id} (${estadia.celular_responsable}) -> Acampantes found: ${acampantesData?.length}`);
-                }
-
-                // If multiple names, join them. If strict 1-1, it will be one.
-                const resolvedName = acampantesData && acampantesData.length > 0
-                    ? acampantesData.map((a: any) => a.nombre_completo || 'Sin Nombre (Null)').join(', ')
-                    : ''; // Empty string will trigger fallback if we had one, or default to 'Sin Nombre' below
+                // Resolve Names from Map
+                const names = acampantesMap[estadia.id] || [];
+                const resolvedName = names.length > 0 ? names.join(', ') : 'Sin Nombre';
 
                 egresosInfo.push({
                     responsable: estadia.celular_responsable,
-                    nombre: resolvedName || 'Sin Nombre',
+                    nombre: resolvedName,
                     celular: estadia.celular_responsable,
                     parcelas: nombresParcelas,
                     cant_personas: estadia.cant_personas_total || 0,
