@@ -54,7 +54,13 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 .single();
 
             if (error) {
-                toast.error('No se encontró acampante con ese celular');
+                console.error("Search error:", error);
+                // PGRST116 = JSON object requested, multiple (or no) rows returned
+                if (error.code === 'PGRST116') {
+                    toast.error('No se encontró acampante con ese celular');
+                } else {
+                    toast.error(`Error de búsqueda: ${error.message}`);
+                }
                 setFoundCamper(null);
             } else if (data) {
                 setFoundCamper(data);
