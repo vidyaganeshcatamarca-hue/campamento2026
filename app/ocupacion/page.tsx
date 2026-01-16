@@ -708,10 +708,10 @@ export default function OcupacionPage() {
                         <p className="text-muted mt-1">Vista en tiempo real de parcelas y egresos</p>
                         <div className="flex gap-2">
                             <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => setShowReingresoModal(true)}
-                                className="flex items-center gap-1"
+                                className="flex items-center gap-1 border border-gray-300 shadow-sm"
                             >
                                 <span className="text-lg">↺</span> Reingreso
                             </Button>

@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ArriboCard } from '@/components/recepcion/ArriboCard';
 import { RegistroManualForm } from '@/components/recepcion/RegistroManualForm';
-import { RefreshCw, UserPlus, Search } from 'lucide-react';
+import { ReingresoModal } from '@/components/ocupacion/ReingresoModal';
+import { RefreshCw, UserPlus, Search, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ArriboWithEstadia extends Acampante {
@@ -21,6 +22,7 @@ export default function RecepcionPage() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showRegistroManual, setShowRegistroManual] = useState(false);
+    const [showReingresoModal, setShowReingresoModal] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchArribos = async () => {
@@ -111,7 +113,15 @@ export default function RecepcionPage() {
                         </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setShowReingresoModal(true)}
+                            className="flex items-center gap-2 border border-gray-300"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                            Reingreso / Buscar
+                        </Button>
                         <Button
                             variant="outline"
                             onClick={fetchArribos}
@@ -127,7 +137,7 @@ export default function RecepcionPage() {
                             className="flex items-center gap-2"
                         >
                             <UserPlus className="w-4 h-4" />
-                            Registrar sin Formulario
+                            Alta Manual
                         </Button>
                     </div>
                 </div>
@@ -193,6 +203,12 @@ export default function RecepcionPage() {
                     }}
                 />
             )}
+
+            {/* Modal de Reingreso */}
+            <ReingresoModal
+                isOpen={showReingresoModal}
+                onClose={() => setShowReingresoModal(false)}
+            />
         </Layout>
     );
 }
