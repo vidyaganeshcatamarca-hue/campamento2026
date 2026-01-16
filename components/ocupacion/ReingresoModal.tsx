@@ -120,7 +120,9 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             // 2. Update Existing Acampante Record
             // Instead of creating a new one, we move the existing camper to the new stay
             if (foundCamper && foundCamper.id) {
-                const { error: updateError } = await supabase
+                console.log(`[Reingreso] Intentando actualizar Acampante ID: ${foundCamper.id} a Estadía ID: ${estadia.id}`);
+
+                const { data: updateData, error: updateError } = await supabase
                     .from('acampantes')
                     .update({
                         estadia_id: estadia.id,
@@ -137,13 +139,24 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         enfermedades: formData.enfermedades,
                         medicacion: formData.medicacion
                     })
-                    .eq('id', foundCamper.id);
+                    .eq('id', foundCamper.id)
+                    .select();
 
                 if (updateError) {
-                    console.error("Error updating acampante:", updateError);
+                    console.error("[Reingreso] Error updating acampante:", updateError);
+                    toast.error(`Error DB: ${updateError.message}`);
                     throw updateError;
                 }
+
+                if (!updateData || updateData.length === 0) {
+                    console.error("[Reingreso] Fatal: El update no devolvió datos (Posible RLS blocking)");
+                    toast.error("Error: No se pudo actualizar el acampante (Permisos/RLS)");
+                    throw new Error("Update returned no rows");
+                }
+
+                console.log("[Reingreso] Acampante actualizado con éxito:", updateData);
             } else {
+                console.warn("[Reingreso] foundCamper no tiene ID o es nulo. Creando nuevo (Fallback).", foundCamper);
                 // Fallback: This shouldn't happen given the search logic, but safe to keep
                 const { error: acampError } = await supabase
                     .from('acampantes')
