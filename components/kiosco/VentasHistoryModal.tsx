@@ -43,9 +43,9 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
             const { data, error } = await supabase
                 .from('kiosco_ventas')
                 .select('*')
-                .gte('fecha', desde)
-                .lte('fecha', hasta)
-                .order('fecha', { ascending: false });
+                .gte('fecha_venta', desde)
+                .lte('fecha_venta', hasta)
+                .order('fecha_venta', { ascending: false });
 
             console.log("Kiosk Ventas Raw:", data?.length, "Error:", error);
 
@@ -58,7 +58,7 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
             if (data && data.length > 0) {
                 const productIds = [...new Set(data.map(v => v.producto_id).filter(Boolean))];
                 const { data: productos } = await supabase
-                    .from('kiosco_productos')
+                    .from('productos_kiosco')
                     .select('id, nombre')
                     .in('id', productIds);
 
@@ -66,7 +66,7 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
 
                 const enrichedData = data.map(venta => ({
                     ...venta,
-                    kiosco_productos: { nombre: productMap.get(venta.producto_id) || 'Producto Eliminado' }
+                    productos_kiosco: { nombre: productMap.get(venta.producto_id) || 'Producto Eliminado' }
                 }));
 
                 setVentas(enrichedData);
@@ -118,7 +118,7 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
     const filteredVentas = ventas.filter(v =>
         // Safely access nested product name
         // @ts-ignore
-        (v.kiosco_productos?.nombre || 'Producto Eliminado').toLowerCase().includes(busqueda.toLowerCase())
+        (v.productos_kiosco?.nombre || 'Producto Eliminado').toLowerCase().includes(busqueda.toLowerCase())
     );
 
     return (
@@ -178,11 +178,11 @@ export function VentasHistoryModal({ isOpen, onClose, onVentaUpdated }: VentasHi
                                     filteredVentas.map(venta => (
                                         <tr key={venta.id} className="hover:bg-gray-50">
                                             <td className="p-3">
-                                                {format(new Date(venta.fecha), 'dd/MM/yyyy HH:mm')}
+                                                {format(new Date(venta.fecha_venta), 'dd/MM/yyyy HH:mm')}
                                             </td>
                                             <td className="p-3 font-medium text-gray-800">
                                                 {/* @ts-ignore */}
-                                                {venta.kiosco_productos?.nombre || 'Producto Eliminado'}
+                                                {venta.productos_kiosco?.nombre || 'Producto Eliminado'}
                                             </td>
 
                                             {/* Editable Fields */}
