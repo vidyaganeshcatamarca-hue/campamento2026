@@ -32,91 +32,47 @@ export default function ReporteTransferenciasPage() {
     }, [fechaDesde, fechaHasta]);
 
     const fetchPagos = async () => {
-        setLoading(true);
-        try {
-            // Paso 1: Obtener pagos con filtro de transferencia y fechas
-            const { data: pagosData, error: pagosError } = await supabase
-                .from('pagos')
-                .select('id, monto_abonado, fecha_pago, metodo_pago, estadia_id, recibo_emitido')
-                .ilike('metodo_pago', 'transferencia')
-                .gte('fecha_pago', fechaDesde + ' 12:00:00')
-                .lte('fecha_pago', fechaHasta + ' 12:00:00')
-                .order('fecha_pago', { ascending: false });
-
-            if (pagosError) {
-                console.error("Error fetching pagos:", pagosError);
-                throw pagosError;
-            }
-
-            if (!pagosData || pagosData.length === 0) {
-                setPagos([]);
-                return;
-            }
-
-            console.log("✅ Pagos fetched:", pagosData.length);
-            console.log("📋 Sample pago:", pagosData[0]);
-
-            // Paso 2: Verificar estadias IDs y validar que existen
-            const estadiaIds = [...new Set(pagosData.map(p => p.estadia_id).filter(Boolean))];
-            console.log("🔑 Unique estadia_ids from pagos:", estadiaIds.length, estadiaIds.slice(0, 5));
-
-            // VERIFICAR: ¿Existen estas estadías en la tabla estadias?
-            const { data: estadiasCheck } = await supabase
-                .from('estadias')
-                .select('id')
-                .in('id', estadiaIds);
-            console.log("🏨 Estadias found in DB:", estadiasCheck?.length, "vs expected:", estadiaIds.length);
-
-            // Paso 3: Obtener acampantes responsables
-            const { data: acampantesData, error: acampError } = await supabase
-                .from('acampantes')
-                .select('estadia_id, nombre_completo, dni, celular, es_responsable_pago')
-                .in('estadia_id', estadiaIds)
-                .eq('es_responsable_pago', true);
-
-            if (acampError) console.error("❌ Error fetching acampantes:", acampError);
-
-            console.log("👥 Acampantes responsables found:", acampantesData?.length);
-            console.log("📋 Sample acampante:", acampantesData?.[0]);
-
-            // Paso 4: Crear mapa de acampantes por estadia_id
-            const acampantesMap = new Map();
-            (acampantesData || []).forEach(a => {
-                acampantesMap.set(a.estadia_id, a);
-            });
-            console.log("🗺️ Acampantes map size:", acampantesMap.size);
-
-            // Paso 5: Enriquecer pagos con datos de acampantes
-            const pagosEnriquecidos = pagosData.map((pago: any) => {
-                const acampante = acampantesMap.get(pago.estadia_id);
-
-                // LOG para debugging
-                if (!acampante) {
-                    console.warn(`⚠️ No acampante found for estadia_id: ${pago.estadia_id} (pago: ${pago.id})`);
-                }
-
-                return {
-                    id: pago.id,
-                    monto_abonado: pago.monto_abonado,
-                    fecha_pago: pago.fecha_pago,
-                    metodo_pago: pago.metodo_pago,
-                    estadia_id: pago.estadia_id,
-                    responsable_nombre: acampante?.nombre_completo || 'Desconocido',
-                    responsable_dni: acampante?.dni || '-',
-                    responsable_celular: acampante?.celular || '-',
-                    recibo_emitido: pago.recibo_emitido || false
-                };
+    setLoading(true);
+    try {
+        // Llamar a la función RPC que hace el JOIN correcto en el servidor
+        const { data: pagosData, error: pagosError } = await supabase
+            .rpc('get_transferencias_report', {
+                fecha_desde: fechaDesde,
+                fecha_hasta: fechaHasta
             });
 
-            setPagos(pagosEnriquecidos);
-
-        } catch (error) {
-            console.error('Error cargando reporte:', error);
-            toast.error('Error al cargar los pagos');
-        } finally {
-            setLoading(false);
+        if (pagosError) {
+            console.error("Error fetching pagos:", pagosError);
+            throw pagosError;
         }
-    };
+
+        if (!pagosData || pagosData.length === 0) {
+            setPagos([]);
+            return;
+        }
+
+        // Los datos ya vienen con el JOIN hecho correctamente
+        const pagosEnriquecidos = pagosData.map((pago: any) => ({
+            id: pago.pago_id,
+            monto_abonado: pago.monto_abonado,
+            fecha_pago: pago.fecha_pago,
+            metodo_pago: pago.metodo_pago,
+            estadia_id: pago.estadia_id,
+            responsable_nombre: pago.responsable_nombre,
+            responsable_dni: pago.responsable_dni,
+            responsable_celular: pago.responsable_celular,
+            recibo_emitido: pago.recibo_emitido
+        }));
+
+        setPagos(pagosEnriquecidos);
+
+    } catch (error) {
+        console.error('Error cargando reporte:', error);
+        toast.error('Error al cargar los pagos');
+    } finally {
+        setLoading(false);
+    }
+};
 
     const handleToggleRecibo = async (id: number, current: boolean) => {
         // Optimistic UI update
