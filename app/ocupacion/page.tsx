@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Layout } from '@/components/ui/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -33,9 +34,11 @@ interface EgresoInfo {
     parcelas: string[];
     cant_personas: number;
     fecha_egreso: string;
+    estadia_id: string;
 }
 
 export default function OcupacionPage() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [parcelas, setParcelas] = useState<ParcelaConEstadia[]>([]);
@@ -344,7 +347,8 @@ export default function OcupacionPage() {
                     celular: estadia.celular_responsable,
                     parcelas: nombresParcelas,
                     cant_personas: estadia.cant_personas_total || 0,
-                    fecha_egreso: estadia.fecha_egreso_programada
+                    fecha_egreso: estadia.fecha_egreso_programada,
+                    estadia_id: estadia.id
                 });
             }
 
@@ -856,6 +860,17 @@ export default function OcupacionPage() {
                                             {egreso.cant_personas} pers.
                                         </span>
                                     </div>
+
+                                    {/* Checkout Button */}
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        className="w-full mt-2"
+                                        onClick={() => router.push(`/checkout/${egreso.estadia_id}`)}
+                                    >
+                                        <LogOut className="w-4 h-4 mr-2" />
+                                        Check Out
+                                    </Button>
                                 </div>
                             ))}
                             {egresos.length === 0 && <p className="text-muted text-center text-sm">No hay egresos.</p>}
