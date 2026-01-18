@@ -71,11 +71,13 @@ export default function KioscoAuditoriaPage() {
             if (vError) throw vError;
 
             const totalVentas = (ventas || []).reduce((sum, v) => sum + v.total_ventas, 0);
-            const totalEspeciales = (ventas || [])
+            const totalEspecialesRaw = (ventas || [])
                 .filter(v => v.producto.toLowerCase().startsWith('prod'))
                 .reduce((sum, v) => sum + v.total_ventas, 0);
 
-            const totalCamping = totalVentas - totalEspeciales;
+            // Regla de Negocio: 80% para Especiales, 20% para Camping
+            const totalEspeciales = totalEspecialesRaw * 0.80;
+            const totalCamping = totalVentas - totalEspeciales; // Esto equivale a (Normal + 0.2 * Especiales)
 
             // 2. Total Rendido
             const { data: rendiciones, error: rError } = await supabase
@@ -190,11 +192,12 @@ export default function KioscoAuditoriaPage() {
     // Calcular metricas
     const totalVentasPeriodo = ventasPeriodo.reduce((sum, v) => sum + Number(v.total_ventas), 0);
 
-    const totalEspeciales = ventasPeriodo
+    const totalEspecialesRaw = ventasPeriodo
         .filter(v => v.producto.toLowerCase().startsWith('prod'))
         .reduce((sum, v) => sum + Number(v.total_ventas), 0);
 
-    // Rendición Camping = (Ventas Totales - Productos Especiales)
+    // Regla de Negocio: 80% Especiales, 20% Camping
+    const totalEspeciales = totalEspecialesRaw * 0.80;
     const rendicionCamping = totalVentasPeriodo - totalEspeciales;
 
     // FIX: Asegurar que monto se trate como numero (Supabase puede devolver string para numeric)

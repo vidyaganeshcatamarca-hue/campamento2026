@@ -125,8 +125,11 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             // 2. Update Existing Acampante Record
             // Instead of creating a new one, we move the existing camper to the new stay
-            if (foundCamper && foundCamper.id) {
-                console.log(`[Reingreso] Intentando actualizar Acampante ID: ${foundCamper.id} a Estadía ID: ${estadia.id}`);
+            // 2. Update Existing Acampante Record
+            // Instead of creating a new one, we move the existing camper to the new stay
+            // MOVED LOGIC: Update by CELULAR as requested, to ensure we catch the record even if we didn't rely on foundCamper.id
+            if (celular) {
+                console.log(`[Reingreso] Intentando actualizar Acampante Celular: ${celular} a Estadía ID: ${estadia.id}`);
 
                 const { data: updateData, error: updateError } = await supabase
                     .from('acampantes')
@@ -145,7 +148,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         enfermedades: formData.enfermedades,
                         medicacion: formData.medicacion
                     })
-                    .eq('id', foundCamper.id)
+                    .eq('celular', celular) // CRITICAL CHANGE: Update by Phone
                     .select();
 
                 if (updateError) {
