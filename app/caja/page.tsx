@@ -48,11 +48,11 @@ export default function CajaPage() {
             // Usamos fecha_visita como referencia (corregido)
             const { data: visitasData } = await supabase
                 .from('visitas_diarias')
-                .select('monto')
+                .select('monto_pagado') // Corrected column name based on user schema
                 .gte('fecha_visita', fechaInicio)
                 .lte('fecha_visita', fechaFin);
 
-            const totalVisitas = visitasData?.reduce((sum, v) => sum + v.monto, 0) || 0;
+            const totalVisitas = visitasData?.reduce((sum, v) => sum + (v.monto_pagado || 0), 0) || 0;
             setTotalVisitas(totalVisitas);
 
             // Total Cobrado = Camping + Visitas
