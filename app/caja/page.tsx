@@ -24,6 +24,8 @@ export default function CajaPage() {
     const [totalKiosco, setTotalKiosco] = useState(0);
     const [ventasKiosco, setVentasKiosco] = useState<any[]>([]);
 
+    const [totalVisitas, setTotalVisitas] = useState(0);
+
     useEffect(() => {
         fetchEstadisticas();
     }, [periodo, fechaDesde, fechaHasta]);
@@ -33,28 +35,46 @@ export default function CajaPage() {
         try {
             const { fechaInicio, fechaFin } = calcularRangoFechas();
 
-            // Total cobrado en el período
+            // 1. Total cobrado camping (Pagos)
             const { data: pagosData } = await supabase
                 .from('pagos')
                 .select('monto_abonado, metodo_pago, estadia_id')
                 .gte('fecha_pago', fechaInicio)
                 .lte('fecha_pago', fechaFin);
 
-            const total = pagosData?.reduce((sum, p) => sum + p.monto_abonado, 0) || 0;
-            setTotalCobrado(total);
+            const totalPagosCamping = pagosData?.reduce((sum, p) => sum + p.monto_abonado, 0) || 0;
 
-            // Pagos por método
+            // 2. Total Visitas Diarias
+            // Usamos fecha_ingreso como referencia de cobro, asumiendo cobro en puerta
+            const { data: visitasData } = await supabase
+                .from('visitas_diarias')
+                .select('monto')
+                .gte('fecha_ingreso', fechaInicio)
+                .lte('fecha_ingreso', fechaFin);
+
+            const totalVisitas = visitasData?.reduce((sum, v) => sum + v.monto, 0) || 0;
+            setTotalVisitas(totalVisitas);
+
+            // Total Cobrado = Camping + Visitas
+            setTotalCobrado(totalPagosCamping + totalVisitas);
+
+            // Pagos por método (Solo aplica a pagos de camping por ahora, visitas suele ser efvo pero no tiene metodo en tabla simple)
             const metodosMap: { [key: string]: number } = {};
             pagosData?.forEach(p => {
                 metodosMap[p.metodo_pago] = (metodosMap[p.metodo_pago] || 0) + p.monto_abonado;
             });
+            // Asumimos visitas en efectivo o genérico? Por ahora solo sumamos al total, no al desglose manual salvo que queramos inventar un método.
+            // Si el cliente no pidió desglose de método para visitas, lo dejamos separado.
+
             setPagosPorMetodo(metodosMap);
 
             // Total adeudado (personas ingresadas con saldo pendiente)
+            // FIX: Coincidir con Dashboard (Solo Activas)
             const { data: estadiasData } = await supabase
                 .from('vista_estadias_con_totales')
                 .select('saldo_pendiente')
                 .eq('ingreso_confirmado', true)
+                .eq('estado_estadia', 'activa') // Match Dashboard Logic
                 .gt('saldo_pendiente', 0); // Solo deudas positivas
 
             const deuda = estadiasData?.reduce((sum, e) => sum + e.saldo_pendiente, 0) || 0;
@@ -63,10 +83,10 @@ export default function CajaPage() {
             // Promedio por estadía
             if (pagosData && pagosData.length > 0) {
                 const estadiasUnicas = new Set(pagosData.map((p: any) => p.estadia_id)).size;
-                setPromedioEstadia(estadiasUnicas > 0 ? total / estadiasUnicas : 0);
+                setPromedioEstadia(estadiasUnicas > 0 ? totalPagosCamping / estadiasUnicas : 0);
             }
 
-            // Ventas de kiosco
+            // Ventas de kiosco AGREGADAS
             const { data: kioscoData } = await supabase
                 .from('vista_ventas_kiosco_diarias')
                 .select('*')
@@ -75,7 +95,22 @@ export default function CajaPage() {
 
             const totalK = kioscoData?.reduce((sum, v) => sum + v.total_ventas, 0) || 0;
             setTotalKiosco(totalK);
-            setVentasKiosco(kioscoData || []);
+
+            // Agrupar por Producto
+            const kioscoAgrupado: Record<string, any> = {};
+            kioscoData?.forEach(v => {
+                if (!kioscoAgrupado[v.producto]) {
+                    kioscoAgrupado[v.producto] = {
+                        producto: v.producto,
+                        cantidad_vendida: 0,
+                        total_ventas: 0
+                    };
+                }
+                kioscoAgrupado[v.producto].cantidad_vendida += v.cantidad_vendida;
+                kioscoAgrupado[v.producto].total_ventas += v.total_ventas;
+            });
+
+            setVentasKiosco(Object.values(kioscoAgrupado));
 
         } catch (error) {
             console.error('Error:', error);
@@ -118,7 +153,9 @@ export default function CajaPage() {
             [''],
             ['Resumen Financiero'],
             ['Concepto', 'Monto'],
-            ['Total Cobrado (Camping)', totalCobrado],
+            ['Total Cobrado (Camping)', totalCobrado - totalVisitas],
+            ['Total Visitas', totalVisitas],
+            ['Total Cobrado (General)', totalCobrado],
             ['Total Kiosco', totalKiosco],
             ['Total General', totalCobrado + totalKiosco],
             ['Total Adeudado', totalAdeudado],
@@ -253,6 +290,22 @@ export default function CajaPage() {
                                     <p className="text-sm text-muted">Total Adeudado</p>
                                     <p className="text-2xl font-bold text-danger">
                                         {formatCurrency(totalAdeudado)}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="pt-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-blue-100 rounded-lg">
+                                    <Users className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted">Ingresos Visitas</p>
+                                    <p className="text-2xl font-bold text-blue-600">
+                                        {formatCurrency(totalVisitas)}
                                     </p>
                                 </div>
                             </div>

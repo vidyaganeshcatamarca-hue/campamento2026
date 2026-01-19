@@ -183,8 +183,8 @@ export default function KioscoAuditoriaPage() {
         });
 
         const sorted = Object.values(stats)
-            .sort((a, b) => b.total_cantidad - a.total_cantidad)
-            .slice(0, 3); // Top 3
+            .sort((a, b) => b.total_cantidad - a.total_cantidad);
+        // .slice(0, 3); // Top 3 removed to show full list grouped by item
 
         setRanking(sorted);
     }, [ventasPeriodo]);
@@ -471,6 +471,36 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                                 value={fechaHasta}
                                 onChange={(e) => setFechaHasta(e.target.value)}
                             />
+                        </div>
+
+                        {/* TABLA AGRUPADA POR PRODUCTO */}
+                        <div className="mb-8">
+                            <h3 className="font-semibold text-lg mb-3">Ventas por Producto (Agrupado)</h3>
+                            <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="text-left p-3">Producto</th>
+                                            <th className="text-right p-3">Cantidad Total</th>
+                                            <th className="text-right p-3">Monto Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {ranking.map((item, i) => (
+                                            <tr key={i} className="hover:bg-gray-50">
+                                                <td className="p-3 font-medium">{item.producto}</td>
+                                                <td className="p-3 text-right">{item.total_cantidad}</td>
+                                                <td className="p-3 text-right font-bold text-primary">{formatCurrency(item.total_monto)}</td>
+                                            </tr>
+                                        ))}
+                                        {ranking.length === 0 && (
+                                            <tr>
+                                                <td colSpan={3} className="p-4 text-center text-muted">No hay ventas en este período</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         {cronologiaCombinada.length > 0 && (
