@@ -45,12 +45,12 @@ export default function CajaPage() {
             const totalPagosCamping = pagosData?.reduce((sum, p) => sum + p.monto_abonado, 0) || 0;
 
             // 2. Total Visitas Diarias
-            // Usamos fecha_ingreso como referencia de cobro, asumiendo cobro en puerta
+            // Usamos fecha_visita como referencia (corregido)
             const { data: visitasData } = await supabase
                 .from('visitas_diarias')
                 .select('monto')
-                .gte('fecha_ingreso', fechaInicio)
-                .lte('fecha_ingreso', fechaFin);
+                .gte('fecha_visita', fechaInicio)
+                .lte('fecha_visita', fechaFin);
 
             const totalVisitas = visitasData?.reduce((sum, v) => sum + v.monto, 0) || 0;
             setTotalVisitas(totalVisitas);
@@ -58,24 +58,22 @@ export default function CajaPage() {
             // Total Cobrado = Camping + Visitas
             setTotalCobrado(totalPagosCamping + totalVisitas);
 
-            // Pagos por método (Solo aplica a pagos de camping por ahora, visitas suele ser efvo pero no tiene metodo en tabla simple)
+            // Pagos por método (Solo aplica a pagos de camping por ahora)
             const metodosMap: { [key: string]: number } = {};
             pagosData?.forEach(p => {
                 metodosMap[p.metodo_pago] = (metodosMap[p.metodo_pago] || 0) + p.monto_abonado;
             });
-            // Asumimos visitas en efectivo o genérico? Por ahora solo sumamos al total, no al desglose manual salvo que queramos inventar un método.
-            // Si el cliente no pidió desglose de método para visitas, lo dejamos separado.
 
             setPagosPorMetodo(metodosMap);
 
             // Total adeudado (personas ingresadas con saldo pendiente)
-            // FIX: Coincidir con Dashboard (Solo Activas)
+            // FIX: Coincidir con Dashboard (Solo Activas, sin filtro > 0 para incluir saldos negativos/créditos)
             const { data: estadiasData } = await supabase
                 .from('vista_estadias_con_totales')
                 .select('saldo_pendiente')
                 .eq('ingreso_confirmado', true)
-                .eq('estado_estadia', 'activa') // Match Dashboard Logic
-                .gt('saldo_pendiente', 0); // Solo deudas positivas
+                .eq('estado_estadia', 'activa'); // Match Dashboard Logic exactly
+            // .gt('saldo_pendiente', 0); // REMOVED: Dashboard sums everything including negative balances
 
             const deuda = estadiasData?.reduce((sum, e) => sum + e.saldo_pendiente, 0) || 0;
             setTotalAdeudado(deuda);
