@@ -151,9 +151,9 @@ export default function CajaPage() {
             [''],
             ['Resumen Financiero'],
             ['Concepto', 'Monto'],
-            ['Total Cobrado (Camping)', totalCobrado - totalVisitas],
+            ['Total Facturado (Camping)', totalCobrado - totalVisitas],
             ['Total Visitas', totalVisitas],
-            ['Total Cobrado (General)', totalCobrado],
+            ['Total Facturado (General)', totalCobrado],
             ['Total Kiosco', totalKiosco],
             ['Total General', totalCobrado + totalKiosco],
             ['Total Adeudado', totalAdeudado],
@@ -269,7 +269,7 @@ export default function CajaPage() {
                                     <DollarSign className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-muted">Total Cobrado</p>
+                                    <p className="text-sm text-muted">Total Facturado</p>
                                     <p className="text-2xl font-bold text-green-600">
                                         {formatCurrency(totalCobrado)}
                                     </p>
