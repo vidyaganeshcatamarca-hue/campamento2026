@@ -27,6 +27,11 @@ export default function SaldoPage() {
     const [esGrupo, setEsGrupo] = useState(false);
     const [integrantesGrupo, setIntegrantesGrupo] = useState<VistaEstadiaConTotales[]>([]);
 
+    const [montoPago, setMontoPago] = useState(0);
+    const [metodoPago, setMetodoPago] = useState('Efectivo');
+    const [fechaPromesa, setFechaPromesa] = useState('');
+    const [paying, setPaying] = useState(false);
+
     const [nuevoDescuento, setNuevoDescuento] = useState(0);
 
     // Tipos para el RPC
