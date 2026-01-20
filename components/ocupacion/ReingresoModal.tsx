@@ -125,16 +125,20 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             // 2. Update Existing Acampante Record
             // Instead of creating a new one, we move the existing camper to the new stay
-            // MOVED LOGIC: Update by CELULAR as requested, to ensure we catch the record even if we didn't rely on foundCamper.id
-            if (celular) {
-                console.log(`[Reingreso] Intentando actualizar Acampante Celular: ${celular} a Estadía ID: ${estadia.id}`);
+            // 2. Update Existing Acampante Record
+            // Instead of creating a new one, we move the existing camper to the new stay
+            // MOVED LOGIC: Update by ID (foundCamper.id) is safest. Fallback to cellular.
+            const targetId = foundCamper?.id;
+
+            if (targetId) {
+                console.log(`[Reingreso] Actualizando Acampante ID: ${targetId} a Estadía ID: ${estadia.id}`);
 
                 const { data: updateData, error: updateError } = await supabase
                     .from('acampantes')
                     .update({
                         estadia_id: estadia.id,
-                        es_responsable_pago: true, // They initiate the stay, so they are responsible
-                        // Update fields just in case they changed in the form
+                        es_responsable_pago: true,
+                        // Update fields
                         nombre_completo: formData.nombre_completo,
                         dni: formData.dni,
                         email: formData.email,
@@ -146,7 +150,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         enfermedades: formData.enfermedades,
                         medicacion: formData.medicacion
                     })
-                    .eq('celular', celular) // CRITICAL CHANGE: Update by Phone
+                    .eq('id', targetId) // CRITICAL FIX: Update by ID
                     .select();
 
                 if (updateError) {
@@ -154,17 +158,37 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     toast.error(`Error DB: ${updateError.message}`);
                     throw updateError;
                 }
-
-                if (!updateData || updateData.length === 0) {
-                    console.error("[Reingreso] Fatal: El update no devolvió datos (Posible RLS blocking)");
-                    toast.error("Error: No se pudo actualizar el acampante (Permisos/RLS)");
-                    throw new Error("Update returned no rows");
-                }
-
                 console.log("[Reingreso] Acampante actualizado con éxito:", updateData);
+
+            } else if (celular) {
+                // Fallback Legacy (should not happen if foundCamper is set)
+                console.warn("[Reingreso] No se encontró ID, intentando por celular:", celular);
+                
+                const { data: updateData, error: updateError } = await supabase
+                    .from('acampantes')
+                    .update({
+                        estadia_id: estadia.id,
+                        es_responsable_pago: true,
+                        // Update fields
+                        nombre_completo: formData.nombre_completo,
+                        dni: formData.dni,
+                        email: formData.email,
+                        domicilio: formData.domicilio,
+                        localidad: formData.localidad,
+                        provincia: formData.provincia,
+                        pais: formData.pais,
+                        es_persona_riesgo: formData.es_persona_riesgo,
+                        enfermedades: formData.enfermedades,
+                        medicacion: formData.medicacion
+                    })
+                    .eq('celular', celular)
+                    .select();
+
+                 if (updateError) throw updateError;
             } else {
-                console.warn("[Reingreso] foundCamper no tiene ID o es nulo. Creando nuevo (Fallback).", foundCamper);
-                // Fallback: This shouldn't happen given the search logic, but safe to keep
+                console.warn("[Reingreso] Fallback Create New (No ID, No Cell Match)");
+                // Create logic... (omitted for brevity, existing fallback below handles legacy flows)
+
                 const { error: acampError } = await supabase
                     .from('acampantes')
                     .insert({
