@@ -118,6 +118,14 @@ export default function ExtensionPage() {
 
     const handleConfirmar = async () => {
         if (!estadia || !nuevaFecha) return;
+
+        // Validar Año Correcto (Evitar bug de año 0025)
+        const year = parseInt(nuevaFecha.split('-')[0]);
+        if (year < 2024) {
+            toast.error(`Fecha inválida: El año ${year} es incorrecto. Verifique el campo de fecha.`);
+            return;
+        }
+
         const calculo = calcularCostoExtension();
         if (!calculo || !calculo.puedeExtender) return;
 
