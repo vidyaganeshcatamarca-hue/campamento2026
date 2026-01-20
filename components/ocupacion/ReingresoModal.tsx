@@ -125,8 +125,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             // 2. Update Existing Acampante Record
             // Instead of creating a new one, we move the existing camper to the new stay
-            // 2. Update Existing Acampante Record
-            // Instead of creating a new one, we move the existing camper to the new stay
             // MOVED LOGIC: Update by CELULAR as requested, to ensure we catch the record even if we didn't rely on foundCamper.id
             if (celular) {
                 console.log(`[Reingreso] Intentando actualizar Acampante Celular: ${celular} a Estadía ID: ${estadia.id}`);

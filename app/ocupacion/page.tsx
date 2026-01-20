@@ -274,8 +274,25 @@ export default function OcupacionPage() {
             let fechaFin: string;
 
             if (modoFecha === 'unica') {
-                fechaInicio = new Date(fechaEgreso + 'T00:00:00').toISOString();
-                fechaFin = new Date(fechaEgreso + 'T23:59:59').toISOString();
+                // FIX: TIMEZONE ROBUSTNESS
+                // Buscamos egresos que caigan en este día tanto en UTC como en Local.
+                // Rango AMPLIO: Desde el mediodía anterior hasta el mediodía siguiente para capturar cualquier '00:00' o '15:00' desplazada.
+                // Mejor aún: Usar fecha literal string 'YYYY-MM-DD' si supabase lo soporta en tipos date, pero es timestamptz.
+
+                // Estrategia: Buscar desde T00:00:00 (Local) - 12hs hasta T23:59:59 (Local) + 12hs
+                // Esto traerá un poco de más, pero podemos filtrar en cliente si es crítico, 
+                // o simplemente asumir que si dice 20-01 en algún timezone, es hoy.
+
+                const baseStart = new Date(fechaEgreso + 'T00:00:00');
+                const baseEnd = new Date(fechaEgreso + 'T23:59:59');
+
+                // Restar 6hs al inicio (para agarrar medianoche UTC si estamos en -3)
+                // Sumar 6hs al fin
+                const startSafe = new Date(baseStart.getTime() - 6 * 60 * 60 * 1000).toISOString();
+                const endSafe = new Date(baseEnd.getTime() + 6 * 60 * 60 * 1000).toISOString();
+
+                fechaInicio = startSafe;
+                fechaFin = endSafe;
             } else {
                 fechaInicio = new Date(fechaDesde + 'T00:00:00').toISOString();
                 fechaFin = new Date(fechaHasta + 'T23:59:59').toISOString();
