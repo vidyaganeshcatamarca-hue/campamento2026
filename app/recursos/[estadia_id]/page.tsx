@@ -42,14 +42,18 @@ export default function RecursosPage() {
             if (error) throw error;
             setEstadia(est);
 
-            // 2. Cargar Precios
+            // 2. Cargar Precios (Ahora con Historial: Tomamos el vigente actual)
             const { data: preciosData } = await supabase
-                .from('precios_config')
-                .select('*');
+                .from('tarifas_historial')
+                .select('categoria, monto, fecha_desde')
+                .order('fecha_desde', { ascending: false }); // Traer los más recientes primero
 
             const preciosMap: Record<string, number> = {};
+            // Al iterar sobre orden descendente, la primera vez que vemos una categoria es la más nueva -> vigente
             preciosData?.forEach(p => {
-                preciosMap[p.clave] = p.valor_por_dia;
+                if (preciosMap[p.categoria] === undefined) {
+                    preciosMap[p.categoria] = p.monto;
+                }
             });
             setPrecios(preciosMap);
 
