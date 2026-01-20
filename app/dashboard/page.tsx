@@ -130,7 +130,12 @@ export default function DashboardPage() {
             setItems(combinedItems);
 
             // 4. Calculate Stats
-            const totalDeuda = estadias?.reduce((acc, curr) => acc + (curr.saldo_pendiente || 0), 0) || 0;
+            // FIX: Sumar SOLO deudas positivas. Los saldos a favor (negativos) no deben restar la deuda total del camping.
+            const totalDeuda = estadias?.reduce((acc, curr) => {
+                const deuda = curr.saldo_pendiente || 0;
+                return acc + (deuda > 0 ? deuda : 0);
+            }, 0) || 0;
+
             const personasRiesgo = acampantes?.filter(p => p.es_persona_riesgo).length || 0;
             const ocupacion = estadias?.filter(e => e.parcela_asignada).length || 0;
 

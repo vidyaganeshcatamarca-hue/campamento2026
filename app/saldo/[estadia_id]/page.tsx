@@ -27,10 +27,18 @@ export default function SaldoPage() {
     const [esGrupo, setEsGrupo] = useState(false);
     const [integrantesGrupo, setIntegrantesGrupo] = useState<VistaEstadiaConTotales[]>([]);
 
-    const [montoPago, setMontoPago] = useState(0);
-    const [metodoPago, setMetodoPago] = useState('Efectivo');
-    const [fechaPromesa, setFechaPromesa] = useState('');
-    const [paying, setPaying] = useState(false);
+    const [nuevoDescuento, setNuevoDescuento] = useState(0);
+
+    // Tipos para el RPC
+    type DetalleItem = {
+        fecha: string;
+        concepto: string;
+        cantidad: number;
+        precio_unitario: number;
+        subtotal: number;
+        tipo: string;
+    }
+    const [detalles, setDetalles] = useState<DetalleItem[]>([]);
 
     useEffect(() => {
         fetchData();
@@ -47,6 +55,15 @@ export default function SaldoPage() {
 
             if (vistaError) throw vistaError;
             setVistaEstadia(vista);
+
+            // 1b. Obtener Detalle de Facturación (RPC)
+            const { data: detailData, error: detailError } = await supabase
+                .rpc('get_detalle_estadia', { p_estadia_id: estadiaId });
+
+            if (!detailError && detailData) {
+                setDetalles(detailData);
+            }
+
 
             // 2. Buscar Grupo (otras estadías con mismo responsable)
             const { data: grupo, error: grupoError } = await supabase
@@ -271,89 +288,63 @@ export default function SaldoPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            {/* Personas */}
-                            <div className="border-b pb-3">
-                                <p className="font-medium mb-2">Personas</p>
-                                <div className="grid grid-cols-2 gap-2 text-sm text-muted">
-                                    <span>{vistaEstadia.acumulado_noches_persona} noches × {formatCurrency(vistaEstadia.p_persona)}</span>
-                                    <span className="text-right font-medium text-foreground">{formatCurrency(totalPersonas)}</span>
-                                </div>
-                            </div>
+                            {/* Desglose Dinámico por Concepto y Precio */}
+                            {(() => {
+                                // Agrupar items por (Concepto + Precio) para no mostrar una lista de 20 días
+                                const agrupados: Record<string, { concepto: string, precio: number, cantidad: number, subtotal: number, dias: number }> = {};
 
-                            {/* Recursos */}
-                            <div className="border-b pb-3">
-                                <p className="font-medium mb-2">Recursos ({diasEstadiaReal} días)</p >
-                                <div className="space-y-1 text-sm">
-                                    {(vistaEstadia.cant_parcelas_total || 0) > 0 && (
-                                        <div className="grid grid-cols-2 gap-2 text-muted">
-                                            <span>Carpas ({vistaEstadia.cant_parcelas_total})</span>
-                                            <span className="text-right font-medium text-foreground">{formatCurrency(totalCarpas)}</span>
-                                        </div>
-                                    )}
-                                    {(vistaEstadia.cant_sillas_total || 0) > 0 && (
-                                        <div className="grid grid-cols-2 gap-2 text-muted">
-                                            <span>Sillas ({vistaEstadia.cant_sillas_total})</span>
-                                            <span className="text-right font-medium text-foreground">{formatCurrency(totalSillas)}</span>
-                                        </div>
-                                    )}
-                                    {(vistaEstadia.cant_mesas_total || 0) > 0 && (
-                                        <div className="grid grid-cols-2 gap-2 text-muted">
-                                            <span>Mesas ({vistaEstadia.cant_mesas_total})</span>
-                                            <span className="text-right font-medium text-foreground">{formatCurrency(totalMesas)}</span>
-                                        </div>
-                                    )}
-                                    {vistaEstadia.p_vehiculo > 0 && (
-                                        <div className="grid grid-cols-2 gap-2 text-muted">
-                                            <span>Vehículo ({vistaEstadia.tipo_vehiculo})</span>
-                                            <span className="text-right font-medium text-foreground">{formatCurrency(totalVehiculo)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                                detalles.forEach(d => {
+                                    const key = `${d.concepto}-${d.precio_unitario}`;
+                                    if (!agrupados[key]) {
+                                        agrupados[key] = {
+                                            concepto: d.concepto,
+                                            precio: d.precio_unitario,
+                                            cantidad: 0,
+                                            subtotal: 0,
+                                            dias: 0 // Para saber cuántas veces aparece (si es diario)
+                                        };
+                                    }
+                                    agrupados[key].cantidad += d.cantidad; // Esto puede ser: dias * personas
+                                    agrupados[key].subtotal += d.subtotal;
+                                    agrupados[key].dias += 1;
+                                });
 
-                            {/* Totales */}
-                            <div className="space-y-2">
-                                {/* Personas en camping */}
-                                {vistaEstadia.acumulado_noches_persona > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted">
-                                            Personas (camping): {vistaEstadia.acumulado_noches_persona} × ${vistaEstadia.p_persona}
-                                        </span>
-                                        <span>{formatCurrency(vistaEstadia.acumulado_noches_persona * vistaEstadia.p_persona)}</span>
+                                return Object.values(agrupados).map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-gray-700">{item.concepto}</span>
+                                            <span className="text-xs text-muted">
+                                                {/* Heurística simple para display: si cantidad > dias, es (dias x personas) */}
+                                                {item.cantidad > item.dias && item.concepto.includes('Noche')
+                                                    ? `${Math.round(item.cantidad / (item.cantidad / item.dias || 1))} noches × ${Math.round(item.cantidad / item.dias)} pax × ${formatCurrency(item.precio)}`
+                                                    : `${item.cantidad} un. × ${formatCurrency(item.precio)}`
+                                                }
+                                            </span>
+                                        </div>
+                                        <span className="font-semibold">{formatCurrency(item.subtotal)}</span>
                                     </div>
-                                )}
+                                ));
+                            })()}
 
-                                {/* Parcelas de camping */}
-                                {vistaEstadia.cant_parcelas_camping > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted">
-                                            Parcelas: {diasEstadiaReal}d × {vistaEstadia.cant_parcelas_camping} × ${vistaEstadia.p_parcela}
-                                        </span>
-                                        <span>{formatCurrency(diasEstadiaReal * vistaEstadia.cant_parcelas_camping * vistaEstadia.p_parcela)}</span>
-                                    </div>
-                                )}
+                            {detalles.length === 0 && (
+                                <p className="text-center text-muted italic">Cargando desglose detallado...</p>
+                            )}
 
-                                {/* Camas */}
-                                {vistaEstadia.cant_camas > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted text-accent">
-                                            Camas (habitación): {diasEstadiaReal}d × {vistaEstadia.cant_camas} × ${vistaEstadia.p_cama}
-                                        </span>
-                                        <span className="text-accent font-medium">{formatCurrency(diasEstadiaReal * vistaEstadia.cant_camas * vistaEstadia.p_cama)}</span>
-                                    </div>
-                                )}
+                            {/* Totales y Descuentos */}
+                            <div className="space-y-2 mt-4 pt-2 border-t">
                                 <div className="grid grid-cols-2 gap-2">
                                     <span className="text-muted">Subtotal Individual:</span>
-                                    <span className="text-right font-medium">{formatCurrency(subtotalIndividual)}</span>
+                                    {/* El subtotal calculamos sumando todo el detalle, o usando el de la vista (deberían coincidir) */}
+                                    <span className="text-right font-medium">{formatCurrency(detalles.reduce((acc, d) => acc + d.subtotal, 0))}</span>
                                 </div>
-                                {descuentoIndividual > 0 && (
+                                {(vistaEstadia.descuento_arbitrario || 0) > 0 && (
                                     <div className="grid grid-cols-2 gap-2 text-green-600">
-                                        <span>Descuento:</span>
-                                        <span className="text-right font-medium">-{formatCurrency(descuentoIndividual)}</span>
+                                        <span>Descuento Aplicado:</span>
+                                        <span className="text-right font-medium">-{formatCurrency(vistaEstadia.descuento_arbitrario || 0)}</span>
                                     </div>
                                 )}
                                 {!esGrupo && (
-                                    <div className="grid grid-cols-2 gap-2 text-lg font-bold border-t pt-2">
+                                    <div className="grid grid-cols-2 gap-2 text-lg font-bold border-t pt-2 mt-2">
                                         <span>Total a Pagar:</span>
                                         <span className="text-right text-primary">{formatCurrency(totalFinal)}</span>
                                     </div>
@@ -467,6 +458,49 @@ export default function SaldoPage() {
                                     </p>
                                 </div>
                             )}
+
+                            {/* Nueva Sección: Descuento al Registrar Pago */}
+                            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                <label className="block text-sm font-medium text-amber-900 mb-1">
+                                    Aplicar Descuento Adicional (Opcional)
+                                </label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={nuevoDescuento || ''}
+                                        onChange={(e) => setNuevoDescuento(parseInt(e.target.value) || 0)}
+                                        className="bg-white"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={async () => {
+                                            if (!nuevoDescuento || nuevoDescuento <= 0) return;
+                                            const confirm = window.confirm(`¿Confirmas aplicar un descuento de ${formatCurrency(nuevoDescuento)}?`);
+                                            if (!confirm) return;
+
+                                            const currentDesc = vistaEstadia?.descuento_arbitrario || 0;
+                                            const { error } = await supabase
+                                                .from('estadias')
+                                                .update({ descuento_arbitrario: currentDesc + nuevoDescuento })
+                                                .eq('id', estadiaId);
+
+                                            if (error) alert("Error");
+                                            else {
+                                                setNuevoDescuento(0);
+                                                fetchData(); // Recargar datos
+                                            }
+                                        }}
+                                        disabled={!nuevoDescuento || nuevoDescuento <= 0}
+                                    >
+                                        Aplicar
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-amber-700 mt-1">
+                                    Se sumará al descuento actual. El saldo bajará automáticamente.
+                                </p>
+                            </div>
 
                             <Button
                                 variant="primary"
