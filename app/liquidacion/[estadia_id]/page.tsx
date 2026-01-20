@@ -697,9 +697,9 @@ export default function LiquidacionPage() {
                         )}
 
                         {/* Vehículo */}
-                        {vistaEstadia.p_vehiculo > 0 && (
+                        {vistaEstadia.p_vehiculo > 0 && vistaEstadia.tipo_vehiculo && vistaEstadia.tipo_vehiculo.toLowerCase() !== 'ninguno' && (
                             <div className="flex justify-between">
-                                <span className="text-muted">Vehículo: {diasEstadiaReal} días</span>
+                                <span className="text-muted">Vehículo ({vistaEstadia.tipo_vehiculo}): {diasEstadiaReal} días</span>
                                 <span>{formatCurrency(calcVehiculo)}</span>
                             </div>
                         )}
