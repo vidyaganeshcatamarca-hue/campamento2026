@@ -110,7 +110,9 @@ export interface VistaEstadiaConTotales {
     p_silla: number; // Precio unitario por silla/día
     p_mesa: number; // Precio unitario por mesa/día
     p_vehiculo: number; // Precio unitario por vehículo/día (0 si ninguno)
+    p_moto: number; // PRECIO MOTO
     monto_total_final: number; // Monto total calculado con descuento
+
     saldo_pendiente: number; // Monto total - pagos realizados
     parcela_asignada?: string | null; // Nombre de parcela/s asignada/s
     es_habitacion?: boolean; // NUEVO: Flag para distinguir precio cama

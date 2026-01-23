@@ -99,8 +99,9 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
         setLoading(true);
         try {
-            console.log("Creando estadía...");
-            // 1. Create New Estadia
+            console.log("[Reingreso] Iniciando proceso...");
+
+            // 1. Crear Nueva Estadía
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
@@ -109,124 +110,57 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     fecha_egreso_programada: new Date(fechaEgreso + 'T12:00:00').toISOString(),
                     cant_personas_total: cantPersonas || 1,
                     estado_estadia: 'activa',
-                    ingreso_confirmado: false, // Pending check-in
+                    ingreso_confirmado: false, // Pendiente check-in
                     observaciones: 'Reingreso (Antiguo Acampante)'
                 })
                 .select()
                 .single();
 
-            if (estError) {
-                console.error("Error creating estadia:", estError);
-                throw estError;
-            }
-            if (!estadia) throw new Error("No se pudo crear la estadía (datos nulos)");
+            if (estError) throw estError;
+            if (!estadia) throw new Error("No se pudo crear la estadía");
 
-            console.log("Estadía creada:", estadia.id);
+            // 2. Vincular Acampante Existente a la nueva Estadía
+            // Usamos el celular como FK única
+            const { error: updateError } = await supabase
+                .from('acampantes')
+                .update({
+                    estadia_id: estadia.id,
+                    es_responsable_pago: true,
+                    // Actualizamos con los datos del form por si cambiaron
+                    nombre_completo: formData.nombre_completo,
+                    dni_pasaporte: formData.dni,
+                    email: formData.email,
+                    domicilio: formData.domicilio,
+                    localidad: formData.localidad,
+                    provincia: formData.provincia,
+                    pais: formData.pais,
+                    es_persona_riesgo: formData.es_persona_riesgo,
+                    enfermedades: formData.enfermedades,
+                    medicacion: formData.medicacion
+                })
+                .eq('celular', celular);
 
-            // 2. Update Existing Acampante Record
-            // Instead of creating a new one, we move the existing camper to the new stay
-            // 2. Update Existing Acampante Record
-            // Instead of creating a new one, we move the existing camper to the new stay
-            // MOVED LOGIC: Update by ID (foundCamper.id) is safest. Fallback to cellular.
-            const targetId = foundCamper?.id;
-
-            if (targetId) {
-                console.log(`[Reingreso] Actualizando Acampante ID: ${targetId} a Estadía ID: ${estadia.id}`);
-
-                const { data: updateData, error: updateError } = await supabase
-                    .from('acampantes')
-                    .update({
-                        estadia_id: estadia.id,
-                        es_responsable_pago: true,
-                        // Update fields
-                        nombre_completo: formData.nombre_completo,
-                        dni: formData.dni,
-                        email: formData.email,
-                        domicilio: formData.domicilio,
-                        localidad: formData.localidad,
-                        provincia: formData.provincia,
-                        pais: formData.pais,
-                        es_persona_riesgo: formData.es_persona_riesgo,
-                        enfermedades: formData.enfermedades,
-                        medicacion: formData.medicacion
-                    })
-                    .eq('id', targetId) // CRITICAL FIX: Update by ID
-                    .select();
-
-                if (updateError) {
-                    console.error("[Reingreso] Error updating acampante:", updateError);
-                    toast.error(`Error DB: ${updateError.message}`);
-                    throw updateError;
-                }
-                console.log("[Reingreso] Acampante actualizado con éxito:", updateData);
-
-            } else if (celular) {
-                // Fallback Legacy (should not happen if foundCamper is set)
-                console.warn("[Reingreso] No se encontró ID, intentando por celular:", celular);
-                
-                const { data: updateData, error: updateError } = await supabase
-                    .from('acampantes')
-                    .update({
-                        estadia_id: estadia.id,
-                        es_responsable_pago: true,
-                        // Update fields
-                        nombre_completo: formData.nombre_completo,
-                        dni: formData.dni,
-                        email: formData.email,
-                        domicilio: formData.domicilio,
-                        localidad: formData.localidad,
-                        provincia: formData.provincia,
-                        pais: formData.pais,
-                        es_persona_riesgo: formData.es_persona_riesgo,
-                        enfermedades: formData.enfermedades,
-                        medicacion: formData.medicacion
-                    })
-                    .eq('celular', celular)
-                    .select();
-
-                 if (updateError) throw updateError;
-            } else {
-                console.warn("[Reingreso] Fallback Create New (No ID, No Cell Match)");
-                // Create logic... (omitted for brevity, existing fallback below handles legacy flows)
-
-                const { error: acampError } = await supabase
-                    .from('acampantes')
-                    .insert({
-                        estadia_id: estadia.id,
-                        celular: celular,
-                        nombre_completo: formData.nombre_completo || 'Sin Nombre',
-                        dni: formData.dni,
-                        email: formData.email,
-                        domicilio: formData.domicilio,
-                        localidad: formData.localidad,
-                        provincia: formData.provincia,
-                        pais: formData.pais,
-                        es_persona_riesgo: formData.es_persona_riesgo || false,
-                        enfermedades: formData.enfermedades,
-                        medicacion: formData.medicacion,
-                        es_responsable_pago: true
-                    });
-
-                if (acampError) {
-                    console.error("Error creating acampante:", acampError);
-                    throw acampError;
-                }
+            if (updateError) {
+                console.error("[Reingreso] Error vinculando acampante:", updateError);
+                // Si falla, borramos la estadía huérfana
+                await supabase.from('estadias').delete().eq('id', estadia.id);
+                throw updateError;
             }
 
-            toast.success('Reingreso iniciado. Redirigiendo...');
+            toast.success('Reingreso registrado. Redirigiendo a Check-in...');
 
-            // Short delay to ensure toast is seen and state propagates
             setTimeout(() => {
                 onClose();
                 router.push(`/checkin/${estadia.id}`);
-            }, 500);
+            }, 800);
 
         } catch (error: any) {
-            console.error("Catch Error:", error);
-            toast.error('Error al procesar reingreso: ' + (error.message || 'Desconocido'));
+            console.error("[Reingreso] Error fatal:", error);
+            toast.error(`Error: ${error.message || 'Desconocido'}`);
         } finally {
             setLoading(false);
         }
+
     };
 
     return (

@@ -73,16 +73,18 @@ export default function CheckInPage() {
             if (estadiaError) throw estadiaError;
             setEstadia(estadiaData);
 
-            // Cargar acampante responsable
-            const { data: acampanteData, error: acampanteError } = await supabase
+            // Cargar acampantes (Priorizar responsable)
+            const { data: acs, error: acampanteError } = await supabase
                 .from('acampantes')
                 .select('*')
-                .eq('estadia_id', estadiaId)
-                .eq('es_responsable_pago', true)
-                .single();
+                .eq('estadia_id', estadiaId);
 
             if (acampanteError) throw acampanteError;
+
+            // Elegir responsable o el primero que aparezca
+            const acampanteData = acs?.find(a => a.es_responsable_pago) || acs?.[0] || null;
             setAcampante(acampanteData);
+
 
             // 3. Cargar parcelas (libres y ocupadas según cantidad_integrantes)
             const { data: parcelasData, error: parcelasError } = await supabase

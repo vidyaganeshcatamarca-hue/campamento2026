@@ -421,18 +421,13 @@ export default function LiquidacionPage() {
         ? diasEstadiaReal * (vistaEstadia.cant_parcelas_camping || 0) * vistaEstadia.p_parcela
         : 0;
 
-    const calcSillas = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
-    const calcMesas = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
-    const calcVehiculo = vistaEstadia ? diasEstadiaReal * vistaEstadia.p_vehiculo : 0;
-    // Wait, original logic in view was: accumulated_nights * (sillas * p_silla). It assumes cost per night per chair? 
-    // Let's stick to View Logic: (COALESCE(acumulado_noches_persona, 0) * ((COALESCE(cant_sillas_total, 0) * p_silla) + ...))
+    const calcSillas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
+    const calcMesas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
+    const hasVehicle = vistaEstadia?.tipo_vehiculo && vistaEstadia.tipo_vehiculo.toLowerCase() !== 'ninguno';
+    const vehPrice = vistaEstadia?.tipo_vehiculo?.toLowerCase().includes('moto') ? (vistaEstadia.p_moto || 0) : (vistaEstadia.p_vehiculo || 0);
+    const calcVehiculo = hasVehicle ? diasEstadiaReal * vehPrice : 0;
+    const calcExtras = calcSillas + calcMesas + calcVehiculo;
 
-    const extrasBase = vistaEstadia ? (vistaEstadia.acumulado_noches_persona || 0) : 0;
-    const calcExtras = vistaEstadia ? extrasBase * (
-        ((vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla) +
-        ((vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa) +
-        vistaEstadia.p_vehiculo
-    ) : 0;
 
     // Recalculate granular for display (optional, but keep total consistent)
     // Actually, let's just use the View's total if possible, or replicate exactly.
@@ -697,12 +692,13 @@ export default function LiquidacionPage() {
                         )}
 
                         {/* Vehículo */}
-                        {vistaEstadia.p_vehiculo > 0 && vistaEstadia.tipo_vehiculo && vistaEstadia.tipo_vehiculo.toLowerCase() !== 'ninguno' && (
+                        {hasVehicle && (
                             <div className="flex justify-between">
-                                <span className="text-muted">Vehículo ({vistaEstadia.tipo_vehiculo}): {diasEstadiaReal} días</span>
+                                <span className="text-muted">Vehículo ({vistaEstadia.tipo_vehiculo}): {diasEstadiaReal} días × {formatCurrency(vehiclePrice)}</span>
                                 <span>{formatCurrency(calcVehiculo)}</span>
                             </div>
                         )}
+
 
                         {/* Subtotal */}
                         <div className="flex justify-between text-lg font-semibold mt-4 pt-4 border-t border-gray-200">

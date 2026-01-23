@@ -226,7 +226,15 @@ export default function SaldoPage() {
     const totalCarpas = diasEstadiaReal * (vistaEstadia.cant_parcelas_total || 0) * vistaEstadia.p_parcela;
     const totalSillas = diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla;
     const totalMesas = diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa;
-    const totalVehiculo = diasEstadiaReal * vistaEstadia.p_vehiculo;
+
+    // Vehicle Price selection
+    const hasVehicle = vistaEstadia?.tipo_vehiculo && vistaEstadia.tipo_vehiculo.toLowerCase() !== 'ninguno';
+    const vehiclePrice = vistaEstadia?.tipo_vehiculo?.toLowerCase().includes('moto')
+        ? (vistaEstadia.p_moto || 0)
+        : (vistaEstadia.p_vehiculo || 0);
+
+    const totalVehiculo = hasVehicle ? diasEstadiaReal * vehiclePrice : 0;
+
 
     const subtotalIndividual = totalPersonas + totalCarpas + totalSillas + totalMesas + totalVehiculo;
     const descuentoIndividual = vistaEstadia.descuento_arbitrario || 0;

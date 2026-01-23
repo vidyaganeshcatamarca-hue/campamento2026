@@ -100,10 +100,16 @@ export default function ExtensionPage() {
             : (estadia.cant_parcelas_total || 0) * estadia.p_parcela;
 
         // 3. Extras Diarios
+        const hasVehicle = estadia.tipo_vehiculo && estadia.tipo_vehiculo.toLowerCase() !== 'ninguno';
+        const vehiclePrice = estadia.tipo_vehiculo?.toLowerCase().includes('moto')
+            ? (estadia.p_moto || 0)
+            : (estadia.p_vehiculo || 0);
+
         const costoExtrasDiario =
             (estadia.cant_sillas_total || 0) * estadia.p_silla +
             (estadia.cant_mesas_total || 0) * estadia.p_mesa +
-            estadia.p_vehiculo;
+            (hasVehicle ? vehiclePrice : 0);
+
 
         const costoDiarioTotal = costoPersonaDiario + costoParcelaDiario + costoExtrasDiario;
         const costoExtension = diasAdicionales * costoDiarioTotal;
