@@ -71,7 +71,7 @@ export default function KioscoAuditoriaPage() {
             if (vError) throw vError;
 
             const totalVentas = (ventas || []).reduce((sum, v) => sum + v.total_ventas, 0);
-            const totalEspecialesRaw = (ventas || [])
+
             // Regla de Negocio: Maestro no suma al total de Camping ni Especiales
             const totalMaestro = (ventas || [])
                 .filter(v => v.producto.toLowerCase().includes('maestro'))
