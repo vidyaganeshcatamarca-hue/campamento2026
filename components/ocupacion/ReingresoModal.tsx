@@ -90,7 +90,14 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         }
     };
 
+    // Reset loading state when step changes to ensure button is enabled
+    React.useEffect(() => {
+        setLoading(false);
+    }, [step]);
+
     const handleSubmit = async () => {
+        console.log("Submit presionado", { fechaEgreso, foundCamper });
+
         if (!fechaEgreso) {
             toast.error('Ingrese fecha de egreso');
             return;
@@ -168,8 +175,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         } catch (error: any) {
             console.error("[Reingreso] Error:", error);
             toast.error(error.message || 'Error desconocido al procesar reingreso');
-        } finally {
-            setLoading(false);
+            setLoading(false); // Ensure loading is reset on error
         }
     };
 
@@ -237,7 +243,13 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
                         <div className="flex justify-between gap-3 pt-2">
                             <Button variant="outline" onClick={() => setStep('search')}>Atrás</Button>
-                            <Button onClick={handleSubmit} disabled={loading} variant="primary" className="w-full">
+                            <Button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={loading}
+                                variant="primary"
+                                className="w-full"
+                            >
                                 {loading ? 'Procesando...' : 'Crear Estadía e Ir a Check-in'} <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                         </div>
