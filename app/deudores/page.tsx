@@ -67,22 +67,11 @@ export default function DeudoresPage() {
                     .eq('es_responsable_pago', true)
                     .single();
 
-                // Si no hay responsable marcado, buscamos cualquiera (fallback)
-                let responsableFinal = responsable;
-                if (!responsableFinal) {
-                    const { data: anyCamper } = await supabase
-                        .from('acampantes')
-                        .select('*')
-                        .eq('estadia_id', estadia.id)
-                        .limit(1)
-                        .single();
-                    responsableFinal = anyCamper;
-                }
-
-                if (responsableFinal) {
+                // Solo agregar si existe un responsable de pago definido
+                if (responsable) {
                     deudoresInfo.push({
                         estadia,
-                        responsable: responsableFinal,
+                        responsable: responsable,
                     });
 
                     total += (estadia.saldo_pendiente || 0);
