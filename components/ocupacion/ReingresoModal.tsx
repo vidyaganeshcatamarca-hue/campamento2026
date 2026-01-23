@@ -247,8 +247,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                                 type="button"
                                 onClick={handleSubmit}
                                 disabled={loading}
-                                variant="primary"
-                                className="w-full"
+                                className="w-full bg-[#E67E22] hover:bg-[#ca6f1e] text-white font-bold border-none"
                             >
                                 {loading ? 'Procesando...' : 'Crear Estadía e Ir a Check-in'} <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
