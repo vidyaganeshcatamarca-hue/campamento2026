@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Search, UserPlus, Calendar, ArrowRight } from 'lucide-react';
+import { Search, UserPlus, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -44,22 +44,24 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         medicacion: ''
     });
 
+    // Reset loading state safely
+    useEffect(() => {
+        setLoading(false);
+    }, [isOpen, step]);
+
     const handleSearch = async () => {
-        if (!celular) return;
+        if (!celular || loading) return;
         setLoading(true);
         try {
-            // Find most recent camper with this phone
             const { data, error } = await supabase
                 .from('acampantes')
                 .select('*')
-                .eq('celular', celular)
+                .eq('celular', celular.trim())
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
 
             if (error) {
-                console.error("Search error:", error);
-                // PGRST116 = JSON object requested, multiple (or no) rows returned
                 if (error.code === 'PGRST116') {
                     toast.error('No se encontró acampante con ese celular');
                 } else {
@@ -70,7 +72,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 setFoundCamper(data);
                 setFormData({
                     nombre_completo: data.nombre_completo || '',
-                    dni: data.dni || '',
+                    dni: data.dni_pasaporte || '',
                     email: data.email || '',
                     domicilio: data.domicilio || '',
                     localidad: data.localidad || '',
@@ -81,35 +83,37 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     medicacion: data.medicacion || ''
                 });
                 setStep('confirm');
+                toast.success('Datos recuperados correctamente');
             }
         } catch (e) {
             console.error(e);
-            toast.error('Error en la búsqueda');
+            toast.error('Error en la búsqueda rápida');
         } finally {
             setLoading(false);
         }
     };
 
-    // Reset loading state when step changes to ensure button is enabled
-    React.useEffect(() => {
-        setLoading(false);
-    }, [step]);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-    const handleSubmit = async () => {
-        console.log("Submit presionado", { fechaEgreso, foundCamper });
+        // DEBUG: Alert inmediato para confirmar que el evento dispara
+        console.log("Submit presionado - Iniciando proceso de reingreso");
 
         if (loading) return;
 
         if (!fechaEgreso) {
-            toast.error('Ingrese fecha de egreso');
+            toast.error('Por favor, ingresa una fecha de egreso');
             return;
         }
+
         if (!foundCamper || !foundCamper.id) {
-            toast.error('Error: No se ha seleccionado un acampante válido');
+            toast.error('Error: No se ha detectado el acampante original');
             return;
         }
 
         setLoading(true);
+        const tid = toast.loading('Registrando reingreso en el sistema...');
+
         try {
             // Calcular noches
             const fIn = new Date(fechaIngreso + 'T12:00:00');
@@ -117,7 +121,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             const diff = fOut.getTime() - fIn.getTime();
             const noches = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 
-            // 1. Crear Nueva Estadía (Payload Completo)
+            // 1. Crear Nueva Estadía
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
@@ -125,29 +129,26 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     fecha_ingreso: fIn.toISOString(),
                     fecha_egreso_programada: fOut.toISOString(),
                     cant_personas_total: cantPersonas || 1,
-                    acumulado_noches_persona: noches * (cantPersonas || 1), // Calculamos inicial
-                    cant_parcelas_total: 1, // Default 1 parcela
+                    acumulado_noches_persona: noches * (cantPersonas || 1),
+                    cant_parcelas_total: 1,
                     cant_sillas_total: 0,
                     cant_mesas_total: 0,
-                    tipo_vehiculo: 'ninguno', // Default
+                    tipo_vehiculo: 'ninguno',
                     estado_estadia: 'activa',
                     ingreso_confirmado: false,
-                    observaciones: `Reingreso: ${foundCamper.nombre_completo}`
+                    observaciones: `Reingreso: ${formData.nombre_completo}`
                 })
                 .select()
                 .single();
 
-            if (estError) throw new Error(`Error creando estadía: ${estError.message}`);
-            if (!estadia) throw new Error("No se pudo crear la estadía");
+            if (estError) throw estError;
 
-            // 2. Vincular Acampante Existente CONCRETO a la nueva Estadía
-            // IMPORTANTE: Usamos el ID del acampante encontrado en la búsqueda, no solo el celular
+            // 2. Vincular Acampante
             const { error: updateError } = await supabase
                 .from('acampantes')
                 .update({
                     estadia_id: estadia.id,
                     es_responsable_pago: true,
-                    // Actualizamos datos básicos
                     nombre_completo: formData.nombre_completo,
                     dni_pasaporte: formData.dni,
                     email: formData.email,
@@ -159,25 +160,27 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('id', foundCamper.id); // <--- CLAVE: Actualizamos SOLO este registro
+                .eq('id', foundCamper.id);
 
             if (updateError) {
-                // Si falla, borramos la estadía huérfana
+                // Limpieza en caso de fallo
                 await supabase.from('estadias').delete().eq('id', estadia.id);
-                throw new Error(`Error vinculando acampante: ${updateError.message}`);
+                throw updateError;
             }
 
-            toast.success('Reingreso completado. Redirigiendo...');
+            toast.dismiss(tid);
+            toast.success('¡Reingreso exitoso!');
 
             setTimeout(() => {
                 onClose();
                 router.push(`/checkin/${estadia.id}`);
-            }, 1000);
+            }, 500);
 
         } catch (error: any) {
-            console.error("[Reingreso] Error:", error);
-            toast.error(error.message || 'Error desconocido al procesar reingreso');
-            setLoading(false); // Ensure loading is reset on error
+            console.error("Error en Reingreso:", error);
+            toast.dismiss(tid);
+            toast.error(`Error: ${error.message || 'No se pudo completar el proceso'}`);
+            setLoading(false);
         }
     };
 
@@ -190,10 +193,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
                 {step === 'search' ? (
                     <div className="space-y-4 py-4">
-                        <p className="text-sm text-muted">Ingrese el celular del acampante antiguo para buscar sus datos.</p>
+                        <p className="text-sm text-muted">Ingresa el celular del acampante para recuperar sus datos.</p>
                         <div className="flex gap-2">
                             <Input
-                                placeholder="Celular (ej: 115555...)"
+                                placeholder="WhatsApp (ej: 383455...)"
                                 value={celular}
                                 onChange={(e) => setCelular(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -204,56 +207,73 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
-                        <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
-                            <h4 className="font-bold text-primary flex items-center gap-2">
-                                <UserPlus className="w-4 h-4" />
-                                {formData.nombre_completo}
-                            </h4>
-                            <p className="text-sm text-muted">Datos recuperados del historial.</p>
+                    <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[75vh] overflow-y-auto px-1">
+                        <div className="bg-primary/5 p-4 rounded-xl border border-primary/20">
+                            <div className="flex items-center gap-3">
+                                <UserPlus className="w-5 h-5 text-primary" />
+                                <div>
+                                    <h4 className="font-bold text-primary leading-none">{formData.nombre_completo}</h4>
+                                    <p className="text-xs text-muted mt-1">Historial encontrado</p>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <Input
                                 label="Fecha Ingreso"
                                 type="date"
                                 value={fechaIngreso}
                                 onChange={(e) => setFechaIngreso(e.target.value)}
+                                required
                             />
                             <Input
                                 label="Fecha Egreso"
                                 type="date"
                                 value={fechaEgreso}
                                 onChange={(e) => setFechaEgreso(e.target.value)}
+                                required
                             />
                         </div>
 
                         <Input
-                            label="Cantidad Personas Total"
+                            label="Invitados en el grupo (Total)"
                             type="number"
                             min={1}
                             value={cantPersonas}
                             onChange={(e) => setCantPersonas(parseInt(e.target.value) || 1)}
+                            required
                         />
 
-                        {/* Editables if needed */}
                         <Input
-                            label="Nombre Completo (Editable)"
+                            label="Nombre Completo (Confirmar)"
                             value={formData.nombre_completo}
                             onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })}
+                            required
                         />
 
-                        <div className="flex justify-between gap-3 pt-2">
-                            <Button variant="outline" onClick={() => setStep('search')}>Atrás</Button>
-                            <Button
-                                type="button"
-                                onClick={handleSubmit}
-                                className={`w-full bg-[#E67E22] hover:bg-[#ca6f1e] text-white font-bold border-none ${loading ? 'opacity-70 cursor-wait' : ''}`}
-                            >
-                                {loading ? 'Procesando...' : 'Crear Estadía e Ir a Check-in'} <ArrowRight className="w-4 h-4 ml-2" />
+                        <div className="flex items-center gap-3 pt-4 sticky bottom-0 bg-white">
+                            <Button type="button" variant="outline" onClick={() => setStep('search')} className="flex-1">
+                                Atrás
                             </Button>
+
+                            {/* BOTON DE ACCION PRINCIPAL - NATIVO Y FORZADO */}
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className={`flex-[2] h-12 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95
+                                    ${loading
+                                        ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                                        : 'bg-[#E67E22] hover:bg-[#D35400] hover:shadow-orange-200/50'
+                                    }
+                                `}
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    {loading ? 'Procesando...' : 'Crear Estadía'}
+                                    {!loading && <ArrowRight className="w-4 h-4" />}
+                                </div>
+                            </button>
                         </div>
-                    </div>
+                    </form>
                 )}
             </DialogContent>
         </Dialog>
