@@ -19,7 +19,8 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
     // Search State
     const [celular, setCelular] = useState('');
-    const [foundCamper, setFoundCamper] = useState<any | null>(null);
+    // Use Ref for source data to avoid state loss/closure issues
+    const foundCamperRef = React.useRef<any>(null);
 
     // New Stay State
     const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0]);
@@ -62,14 +63,16 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 .single();
 
             if (error) {
+                window.alert("DEBUG Search Error: " + error.message);
                 if (error.code === 'PGRST116') {
                     toast.error('No se encontró acampante con ese celular');
                 } else {
                     toast.error(`Error de búsqueda: ${error.message}`);
                 }
-                setFoundCamper(null);
+                foundCamperRef.current = null;
             } else if (data) {
-                setFoundCamper(data);
+                window.alert("DEBUG Search Éxitoso: " + JSON.stringify(data));
+                foundCamperRef.current = data;
                 setFormData({
                     nombre_completo: data.nombre_completo || '',
                     dni: data.dni_pasaporte || '',
@@ -87,6 +90,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             }
         } catch (e) {
             console.error(e);
+            window.alert("DEBUG Search CATCH: " + JSON.stringify(e));
             toast.error('Error en la búsqueda rápida');
         } finally {
             setLoading(false);
@@ -96,25 +100,22 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // TEST INICIAL
-        window.alert("DEBUG 1: Iniciando handleSubmit");
+        const currentCamper = foundCamperRef.current;
+        window.alert("DEBUG 1: InhandleSubmit. State Camper: " + JSON.stringify(currentCamper));
 
-        if (loading) {
-            window.alert("DEBUG: Ya está cargando...");
-            return;
-        }
+        if (loading) return;
 
         if (!fechaEgreso) {
-            window.alert("DEBUG Error: No hay fecha de egreso");
+            window.alert("DEBUG FAIL: No fechaEgreso");
             return;
         }
 
-        if (!foundCamper || !foundCamper.id) {
-            window.alert("DEBUG Error: No hay foundCamper detectado");
+        if (!currentCamper || !currentCamper.id) {
+            window.alert("DEBUG FAIL: No hay camper o no tiene ID. DATA: " + JSON.stringify(currentCamper));
             return;
         }
 
-        window.alert(`DEBUG 2: Validaciones OK. Camper: ${foundCamper.nombre_completo}`);
+        window.alert(`DEBUG 2: OK! ID=${currentCamper.id}. Procediendo a insertar...`);
         setLoading(true);
         const tid = toast.loading('Registrando reingreso en el sistema...');
 
@@ -125,13 +126,11 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             const diff = fOut.getTime() - fIn.getTime();
             const noches = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 
-            window.alert(`DEBUG 3: Noches calculadas: ${noches}. Intentando Insert en base de datos...`);
-
             // 1. Crear Nueva Estadía
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
-                    celular_responsable: foundCamper.celular,
+                    celular_responsable: currentCamper.celular,
                     fecha_ingreso: fIn.toISOString(),
                     fecha_egreso_programada: fOut.toISOString(),
                     cant_personas_total: cantPersonas || 1,
@@ -148,8 +147,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 .single();
 
             if (estError) throw estError;
-
-            window.alert("DEBUG 4: Estadía creada ID: " + estadia.id + ". Intentando Update acampante...");
 
             // 2. Vincular Acampante
             const { error: updateError } = await supabase
@@ -168,11 +165,9 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('id', foundCamper.id);
+                .eq('id', currentCamper.id);
 
             if (updateError) {
-                window.alert("DEBUG Error Update: " + updateError.message);
-                // Limpieza en caso de fallo
                 await supabase.from('estadias').delete().eq('id', estadia.id);
                 throw updateError;
             }
@@ -180,7 +175,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             toast.dismiss(tid);
             toast.success('¡Reingreso exitoso!');
 
-            window.alert("DEBUG 5: ¡ÉXITO TOTAL! Redirigiendo...");
+            window.alert("DEBUG FINAL: ¡Misión cumplida! Redirigiendo...");
 
             setTimeout(() => {
                 onClose();
@@ -191,7 +186,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             console.error("Error en Reingreso:", error);
             toast.dismiss(tid);
             toast.error(`Error: ${error.message || 'No se pudo completar el proceso'}`);
-            window.alert("DEBUG ERROR CAPTURADO: " + (error.message || JSON.stringify(error)));
+            window.alert("Error CRITICAL: " + error.message);
             setLoading(false);
         }
     };
