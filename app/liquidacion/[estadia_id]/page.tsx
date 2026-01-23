@@ -424,7 +424,7 @@ export default function LiquidacionPage() {
     const calcSillas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_sillas_total || 0) * vistaEstadia.p_silla : 0;
     const calcMesas = vistaEstadia ? diasEstadiaReal * (vistaEstadia.cant_mesas_total || 0) * vistaEstadia.p_mesa : 0;
     const hasVehicle = vistaEstadia?.tipo_vehiculo && vistaEstadia.tipo_vehiculo.toLowerCase() !== 'ninguno';
-    const vehPrice = vistaEstadia?.tipo_vehiculo?.toLowerCase().includes('moto') ? (vistaEstadia.p_moto || 0) : (vistaEstadia.p_vehiculo || 0);
+    const vehPrice = vistaEstadia?.tipo_vehiculo?.toLowerCase().includes('moto') ? (vistaEstadia.p_moto || 0) : (vistaEstadia?.p_vehiculo || 0);
     const calcVehiculo = hasVehicle ? diasEstadiaReal * vehPrice : 0;
     const calcExtras = calcSillas + calcMesas + calcVehiculo;
 
