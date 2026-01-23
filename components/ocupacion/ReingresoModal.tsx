@@ -87,46 +87,43 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     };
 
     const handleSubmit = async () => {
-        console.log("Submit presionado");
         if (!fechaEgreso) {
             toast.error('Ingrese fecha de egreso');
             return;
         }
-        if (!celular) {
-            toast.error('Error: Celular no encontrado');
+        if (!foundCamper || !foundCamper.id) {
+            toast.error('Error: No se ha seleccionado un acampante válido');
             return;
         }
 
         setLoading(true);
         try {
-            console.log("[Reingreso] Iniciando proceso...");
-
             // 1. Crear Nueva Estadía
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
-                    celular_responsable: celular,
+                    celular_responsable: foundCamper.celular, // Usamos el del camper encontrado
                     fecha_ingreso: new Date(fechaIngreso + 'T12:00:00').toISOString(),
                     fecha_egreso_programada: new Date(fechaEgreso + 'T12:00:00').toISOString(),
                     cant_personas_total: cantPersonas || 1,
                     estado_estadia: 'activa',
                     ingreso_confirmado: false, // Pendiente check-in
-                    observaciones: 'Reingreso (Antiguo Acampante)'
+                    observaciones: `Reingreso: ${foundCamper.nombre_completo}`
                 })
                 .select()
                 .single();
 
-            if (estError) throw estError;
+            if (estError) throw new Error(`Error creando estadía: ${estError.message}`);
             if (!estadia) throw new Error("No se pudo crear la estadía");
 
-            // 2. Vincular Acampante Existente a la nueva Estadía
-            // Usamos el celular como FK única
+            // 2. Vincular Acampante Existente CONCRETO a la nueva Estadía
+            // IMPORTANTE: Usamos el ID del acampante encontrado en la búsqueda, no solo el celular
             const { error: updateError } = await supabase
                 .from('acampantes')
                 .update({
                     estadia_id: estadia.id,
                     es_responsable_pago: true,
-                    // Actualizamos con los datos del form por si cambiaron
+                    // Actualizamos datos básicos
                     nombre_completo: formData.nombre_completo,
                     dni_pasaporte: formData.dni,
                     email: formData.email,
@@ -138,29 +135,27 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('celular', celular);
+                .eq('id', foundCamper.id); // <--- CLAVE: Actualizamos SOLO este registro
 
             if (updateError) {
-                console.error("[Reingreso] Error vinculando acampante:", updateError);
                 // Si falla, borramos la estadía huérfana
                 await supabase.from('estadias').delete().eq('id', estadia.id);
-                throw updateError;
+                throw new Error(`Error vinculando acampante: ${updateError.message}`);
             }
 
-            toast.success('Reingreso registrado. Redirigiendo a Check-in...');
+            toast.success('Reingreso completado. Redirigiendo...');
 
             setTimeout(() => {
                 onClose();
                 router.push(`/checkin/${estadia.id}`);
-            }, 800);
+            }, 1000);
 
         } catch (error: any) {
-            console.error("[Reingreso] Error fatal:", error);
-            toast.error(`Error: ${error.message || 'Desconocido'}`);
+            console.error("[Reingreso] Error:", error);
+            toast.error(error.message || 'Error desconocido al procesar reingreso');
         } finally {
             setLoading(false);
         }
-
     };
 
     return (
