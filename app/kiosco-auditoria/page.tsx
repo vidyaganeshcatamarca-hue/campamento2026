@@ -72,12 +72,20 @@ export default function KioscoAuditoriaPage() {
 
             const totalVentas = (ventas || []).reduce((sum, v) => sum + v.total_ventas, 0);
             const totalEspecialesRaw = (ventas || [])
+            // Regla de Negocio: Maestro no suma al total de Camping ni Especiales
+            const totalMaestro = (ventas || [])
+                .filter(v => v.producto.toLowerCase().includes('maestro'))
+                .reduce((sum, v) => sum + v.total_ventas, 0);
+
+            const totalVentasNeto = totalVentas - totalMaestro;
+
+            const totalEspecialesRaw = (ventas || [])
                 .filter(v => v.producto.toLowerCase().startsWith('prod'))
                 .reduce((sum, v) => sum + v.total_ventas, 0);
 
             // Regla de Negocio: 80% para Especiales, 20% para Camping
             const totalEspeciales = totalEspecialesRaw * 0.80;
-            const totalCamping = totalVentas - totalEspeciales; // Esto equivale a (Normal + 0.2 * Especiales)
+            const totalCamping = totalVentasNeto - totalEspeciales; // Esto equivale a (Normal + 0.2 * Especiales)
 
             // 2. Total Rendido
             const { data: rendiciones, error: rError } = await supabase
@@ -111,8 +119,11 @@ export default function KioscoAuditoriaPage() {
 
             setVentasDelDia(data || []);
 
-            const total = (data || []).reduce((sum, v) => sum + v.total_ventas, 0);
-            const transacciones = (data || []).reduce((sum, v) => sum + v.cantidad_vendida, 0);
+            // Filtrar Maestro del total financiero (pero mantenerlo en la lista visual si se desea, o separarlo)
+            const ventasNetas = (data || []).filter(v => !v.producto.toLowerCase().includes('maestro'));
+
+            const total = ventasNetas.reduce((sum, v) => sum + v.total_ventas, 0);
+            const transacciones = ventasNetas.reduce((sum, v) => sum + v.cantidad_vendida, 0); // Opcional: ¿Maestro cuenta como transacción? Mejor no para coherencia de caja.
 
             setTotalDia(total);
             setTransaccionesDia(transacciones);
@@ -190,9 +201,16 @@ export default function KioscoAuditoriaPage() {
     }, [ventasPeriodo]);
 
     // Calcular metricas
-    const totalVentasPeriodo = ventasPeriodo.reduce((sum, v) => sum + Number(v.total_ventas), 0);
+    // 1. Calcular consumo Maestro (Gasto Interno)
+    const totalMaestroPeriodo = ventasPeriodo
+        .filter(v => v.producto.toLowerCase().includes('maestro'))
+        .reduce((sum, v) => sum + Number(v.total_ventas), 0);
 
-    const totalEspecialesRaw = ventasPeriodo
+    // 2. Calcular Ventas Reales (Excluyendo Maestro)
+    const ventasRealesPeriodo = ventasPeriodo.filter(v => !v.producto.toLowerCase().includes('maestro'));
+    const totalVentasPeriodo = ventasRealesPeriodo.reduce((sum, v) => sum + Number(v.total_ventas), 0);
+
+    const totalEspecialesRaw = ventasRealesPeriodo
         .filter(v => v.producto.toLowerCase().startsWith('prod'))
         .reduce((sum, v) => sum + Number(v.total_ventas), 0);
 
@@ -261,15 +279,20 @@ export default function KioscoAuditoriaPage() {
     };
 
     const cerrarCaja = async () => {
+        const ventasNetas = ventasDelDia.filter(v => !v.producto.toLowerCase().includes('maestro'));
+        const ventasMaestro = ventasDelDia.filter(v => v.producto.toLowerCase().includes('maestro'));
+
         const mensaje = `
 🏪 *CIERRE DE CAJA KIOSCO*
 📅 Fecha: ${format(new Date(), 'dd/MM/yyyy')}
 
-💰 Total del día: ${formatCurrency(totalDia)}
+💰 Total del día (Caja): ${formatCurrency(totalDia)}
 🛒 Transacciones: ${transaccionesDia}
 
 📊 Desglose por producto:
-${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${formatCurrency(v.total_ventas)}`).join('\n')}
+${ventasNetas.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${formatCurrency(v.total_ventas)}`).join('\n')}
+
+${ventasMaestro.length > 0 ? `🧘 Consumo Maestro (No suma a caja):\n${ventasMaestro.map(v => `• ${v.producto}: ${formatCurrency(v.total_ventas)}`).join('\n')}` : ''}
         `.trim();
 
         await sendWhatsAppNotification({
@@ -397,6 +420,17 @@ ${ventasDelDia.map(v => `• ${v.producto}: ${v.cantidad_vendida} unidades - ${f
                                         <p className="text-xs text-green-800 uppercase font-semibold">Rendición Camping</p>
                                         <p className="text-lg font-bold text-green-700">{formatCurrency(rendicionCamping)}</p>
                                         <p className="text-xs text-green-600 mt-1">(Total - Esp)</p>
+                                    </div>
+
+                                    {/* SECCIÓN MAESTRO */}
+                                    <div className="col-span-2 p-3 border rounded-lg bg-gray-100 border-gray-300">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="text-xs text-gray-700 uppercase font-semibold">Consumo Maestro (Gasto)</p>
+                                                <p className="text-xs text-gray-500">No afecta caja ni rendiciones</p>
+                                            </div>
+                                            <p className="text-xl font-bold text-gray-700">{formatCurrency(totalMaestroPeriodo)}</p>
+                                        </div>
                                     </div>
                                 </div>
 
