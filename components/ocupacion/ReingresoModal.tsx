@@ -96,7 +96,9 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // DEBUG: Alert inmediato para confirmar que el evento dispara
+        // TEST DE VIDA: Si ves esto, el click funciona
+        window.alert("¡Botón presionado correctamente!");
+
         console.log("Submit presionado - Iniciando proceso de reingreso");
 
         if (loading) return;
