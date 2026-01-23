@@ -19,8 +19,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
     // Search State
     const [celular, setCelular] = useState('');
-    // Use Ref for source data to avoid state loss/closure issues
-    const foundCamperRef = React.useRef<any>(null);
+    const [foundCamper, setFoundCamper] = useState<any>(null);
 
     // New Stay State
     const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0]);
@@ -48,11 +47,18 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     // Reset loading state safely
     useEffect(() => {
         setLoading(false);
-    }, [isOpen, step]);
+        if (!isOpen) {
+            setStep('search');
+            setFoundCamper(null);
+            setCelular('');
+        }
+    }, [isOpen]);
 
     const handleSearch = async () => {
         if (!celular || loading) return;
         setLoading(true);
+        console.log("Iniciando búsqueda para:", celular);
+
         try {
             const { data, error } = await supabase
                 .from('acampantes')
@@ -63,16 +69,16 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 .single();
 
             if (error) {
-                window.alert("DEBUG Search Error: " + error.message);
+                console.error("Search error:", error);
                 if (error.code === 'PGRST116') {
                     toast.error('No se encontró acampante con ese celular');
                 } else {
-                    toast.error(`Error de búsqueda: ${error.message}`);
+                    toast.error(`Error: ${error.message}`);
                 }
-                foundCamperRef.current = null;
+                setFoundCamper(null);
             } else if (data) {
-                window.alert("DEBUG Search Éxitoso: " + JSON.stringify(data));
-                foundCamperRef.current = data;
+                console.log("Camper encontrado:", data);
+                setFoundCamper(data);
                 setFormData({
                     nombre_completo: data.nombre_completo || '',
                     dni: data.dni_pasaporte || '',
@@ -90,7 +96,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             }
         } catch (e) {
             console.error(e);
-            window.alert("DEBUG Search CATCH: " + JSON.stringify(e));
             toast.error('Error en la búsqueda rápida');
         } finally {
             setLoading(false);
@@ -100,24 +105,26 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const currentCamper = foundCamperRef.current;
-        window.alert("DEBUG 1: InhandleSubmit. State Camper: " + JSON.stringify(currentCamper));
+        // --- LOGS DE VERSION ---
+        const VERSION = "V4_FINAL_TEST";
+        console.log(`[${VERSION}] Submit click detectado`);
 
         if (loading) return;
 
+        // Validaciones críticas con ALERTAS para depurar en móvil/vercel
+        if (!foundCamper || !foundCamper.id) {
+            window.alert(`[${VERSION}] ERROR: foundCamper es NULL o no tiene ID. Valor: ` + JSON.stringify(foundCamper));
+            return;
+        }
+
         if (!fechaEgreso) {
-            window.alert("DEBUG FAIL: No fechaEgreso");
+            window.alert(`[${VERSION}] ERROR: Falta fecha de egreso`);
             return;
         }
 
-        if (!currentCamper || !currentCamper.id) {
-            window.alert("DEBUG FAIL: No hay camper o no tiene ID. DATA: " + JSON.stringify(currentCamper));
-            return;
-        }
-
-        window.alert(`DEBUG 2: OK! ID=${currentCamper.id}. Procediendo a insertar...`);
+        window.alert(`[${VERSION}] OK: ID=${foundCamper.id}. Iniciando transacción...`);
         setLoading(true);
-        const tid = toast.loading('Registrando reingreso en el sistema...');
+        const tid = toast.loading('Registrando reingreso...');
 
         try {
             // Calcular noches
@@ -130,15 +137,12 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
-                    celular_responsable: currentCamper.celular,
+                    celular_responsable: foundCamper.celular,
                     fecha_ingreso: fIn.toISOString(),
                     fecha_egreso_programada: fOut.toISOString(),
                     cant_personas_total: cantPersonas || 1,
                     acumulado_noches_persona: noches * (cantPersonas || 1),
                     cant_parcelas_total: 1,
-                    cant_sillas_total: 0,
-                    cant_mesas_total: 0,
-                    tipo_vehiculo: 'ninguno',
                     estado_estadia: 'activa',
                     ingreso_confirmado: false,
                     observaciones: `Reingreso: ${formData.nombre_completo}`
@@ -148,7 +152,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             if (estError) throw estError;
 
-            // 2. Vincular Acampante
+            // 2. Actualizar Acampante
             const { error: updateError } = await supabase
                 .from('acampantes')
                 .update({
@@ -165,9 +169,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('id', currentCamper.id);
+                .eq('id', foundCamper.id);
 
             if (updateError) {
+                // Rollback si falla el vínculo
                 await supabase.from('estadias').delete().eq('id', estadia.id);
                 throw updateError;
             }
@@ -175,7 +180,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             toast.dismiss(tid);
             toast.success('¡Reingreso exitoso!');
 
-            window.alert("DEBUG FINAL: ¡Misión cumplida! Redirigiendo...");
+            window.alert(`[${VERSION}] ¡EXITO! Redirigiendo a Check-in...`);
 
             setTimeout(() => {
                 onClose();
@@ -183,10 +188,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             }, 500);
 
         } catch (error: any) {
-            console.error("Error en Reingreso:", error);
+            console.error("Error en proceso:", error);
             toast.dismiss(tid);
-            toast.error(`Error: ${error.message || 'No se pudo completar el proceso'}`);
-            window.alert("Error CRITICAL: " + error.message);
+            toast.error(`Error: ${error.message}`);
+            window.alert(`[${VERSION}] TRANSACTION FAILED: ` + error.message);
             setLoading(false);
         }
     };
@@ -200,10 +205,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
                 {step === 'search' ? (
                     <div className="space-y-4 py-4">
-                        <p className="text-sm text-muted">Ingresa el celular del acampante para recuperar sus datos.</p>
+                        <p className="text-sm text-muted">Ingresa el celular para recuperar datos históricos.</p>
                         <div className="flex gap-2">
                             <Input
-                                placeholder="WhatsApp (ej: 383455...)"
+                                placeholder="3834..."
                                 value={celular}
                                 onChange={(e) => setCelular(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -219,8 +224,8 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                             <div className="flex items-center gap-3">
                                 <UserPlus className="w-5 h-5 text-primary" />
                                 <div>
-                                    <h4 className="font-bold text-primary leading-none">{formData.nombre_completo}</h4>
-                                    <p className="text-xs text-muted mt-1">Historial encontrado</p>
+                                    <h4 className="font-bold text-primary leading-none">{formData.nombre_completo || 'Acampante'}</h4>
+                                    <p className="text-xs text-muted mt-1">Socio / Cliente frecuente</p>
                                 </div>
                             </div>
                         </div>
@@ -243,7 +248,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         </div>
 
                         <Input
-                            label="Invitados en el grupo (Total)"
+                            label="Integrantes del grupo"
                             type="number"
                             min={1}
                             value={cantPersonas}
@@ -252,32 +257,27 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                         />
 
                         <Input
-                            label="Nombre Completo (Confirmar)"
+                            label="Confirmar Nombre"
                             value={formData.nombre_completo}
                             onChange={(e) => setFormData({ ...formData, nombre_completo: e.target.value })}
                             required
                         />
 
-                        <div className="flex items-center gap-3 pt-4 sticky bottom-0 bg-white">
+                        <div className="flex gap-3 pt-6 sticky bottom-0 bg-white">
                             <Button type="button" variant="outline" onClick={() => setStep('search')} className="flex-1">
                                 Atrás
                             </Button>
-
-                            {/* BOTON DE ACCION PRINCIPAL - NATIVO Y FORZADO */}
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className={`flex-[2] h-12 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95
+                                className={`flex-[2] h-11 rounded-lg font-bold text-white transition-all
                                     ${loading
-                                        ? 'bg-gray-400 cursor-not-allowed opacity-70'
-                                        : 'bg-[#E67E22] hover:bg-[#D35400] hover:shadow-orange-200/50'
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-[#E67E22] hover:bg-[#D35400] active:scale-95 shadow-md shadow-orange-200'
                                     }
                                 `}
                             >
-                                <div className="flex items-center justify-center gap-2">
-                                    {loading ? 'Procesando...' : 'Crear Estadía'}
-                                    {!loading && <ArrowRight className="w-4 h-4" />}
-                                </div>
+                                {loading ? 'Enviando...' : 'Crear Estadía'}
                             </button>
                         </div>
                     </form>
