@@ -62,7 +62,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         try {
             const { data, error } = await supabase
                 .from('acampantes')
-                .select('*')
+                .select('*') // Forzando select * por seguridad
                 .eq('celular', celular.trim())
                 .order('created_at', { ascending: false })
                 .limit(1)
@@ -78,6 +78,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 setFoundCamper(null);
             } else if (data) {
                 console.log("Camper encontrado:", data);
+
+                // --- DEBUG: Forzar ID si por alguna razón no viene en el primer nivel del objeto ---
+                if (!data.id && data.uuid) data.id = data.uuid;
+
                 setFoundCamper(data);
                 setFormData({
                     nombre_completo: data.nombre_completo || '',
@@ -106,14 +110,22 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         e.preventDefault();
 
         // --- LOGS DE VERSION ---
-        const VERSION = "V4_FINAL_TEST";
+        const VERSION = "V5_ID_FIX";
         console.log(`[${VERSION}] Submit click detectado`);
 
         if (loading) return;
 
+        // Intentar detectar el ID en diferentes posibles campos (aunque debería ser 'id')
+        const camperId = foundCamper?.id || foundCamper?.ID || foundCamper?.uuid;
+
         // Validaciones críticas con ALERTAS para depurar en móvil/vercel
-        if (!foundCamper || !foundCamper.id) {
-            window.alert(`[${VERSION}] ERROR: foundCamper es NULL o no tiene ID. Valor: ` + JSON.stringify(foundCamper));
+        if (!foundCamper) {
+            window.alert(`[${VERSION}] ERROR: foundCamper es NULL`);
+            return;
+        }
+
+        if (!camperId) {
+            window.alert(`[${VERSION}] ERROR: No se detecta ID en el camper. Objeto completo: ` + JSON.stringify(foundCamper));
             return;
         }
 
@@ -122,7 +134,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             return;
         }
 
-        window.alert(`[${VERSION}] OK: ID=${foundCamper.id}. Iniciando transacción...`);
+        window.alert(`[${VERSION}] OK: ID=${camperId}. Iniciando transacción...`);
         setLoading(true);
         const tid = toast.loading('Registrando reingreso...');
 
@@ -169,7 +181,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('id', foundCamper.id);
+                .eq('id', camperId); // Usar el ID detectado
 
             if (updateError) {
                 // Rollback si falla el vínculo
