@@ -71,7 +71,8 @@ export default function KioscoPage() {
             // Tratamiento especial para 'Otros': siempre crea nueva instancia
             // Tratamiento especial para 'Otros' y productos 'Prod ...'
             const esEspecial = producto.nombre.toLowerCase().includes('otros') ||
-                producto.nombre.toLowerCase().startsWith('prod ');
+                producto.nombre.toLowerCase().startsWith('prod ') ||
+                producto.nombre.toLowerCase().includes('maestro');
 
             if (esEspecial) {
                 return [...prev, {
@@ -294,7 +295,8 @@ export default function KioscoPage() {
                                             {carrito.map(item => {
                                                 const precio = item.precioEditado ?? item.producto.precio;
                                                 const esEspecial = item.producto.nombre.toLowerCase().includes('otros') ||
-                                                    item.producto.nombre.toLowerCase().startsWith('prod ');
+                                                    item.producto.nombre.toLowerCase().startsWith('prod ') ||
+                                                    item.producto.nombre.toLowerCase().includes('maestro');
 
                                                 return (
                                                     <div key={item.id} className="border-b border-gray-200 pb-3">

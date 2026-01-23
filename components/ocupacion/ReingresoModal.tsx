@@ -98,16 +98,27 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
         setLoading(true);
         try {
-            // 1. Crear Nueva Estadía
+            // Calcular noches
+            const fIn = new Date(fechaIngreso + 'T12:00:00');
+            const fOut = new Date(fechaEgreso + 'T12:00:00');
+            const diff = fOut.getTime() - fIn.getTime();
+            const noches = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+
+            // 1. Crear Nueva Estadía (Payload Completo)
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
-                    celular_responsable: foundCamper.celular, // Usamos el del camper encontrado
-                    fecha_ingreso: new Date(fechaIngreso + 'T12:00:00').toISOString(),
-                    fecha_egreso_programada: new Date(fechaEgreso + 'T12:00:00').toISOString(),
+                    celular_responsable: foundCamper.celular,
+                    fecha_ingreso: fIn.toISOString(),
+                    fecha_egreso_programada: fOut.toISOString(),
                     cant_personas_total: cantPersonas || 1,
+                    acumulado_noches_persona: noches * (cantPersonas || 1), // Calculamos inicial
+                    cant_parcelas_total: 1, // Default 1 parcela
+                    cant_sillas_total: 0,
+                    cant_mesas_total: 0,
+                    tipo_vehiculo: 'ninguno', // Default
                     estado_estadia: 'activa',
-                    ingreso_confirmado: false, // Pendiente check-in
+                    ingreso_confirmado: false,
                     observaciones: `Reingreso: ${foundCamper.nombre_completo}`
                 })
                 .select()
