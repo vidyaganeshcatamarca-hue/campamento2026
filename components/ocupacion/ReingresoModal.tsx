@@ -23,7 +23,11 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
     // New Stay State
     const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0]);
-    const [fechaEgreso, setFechaEgreso] = useState('');
+    const [fechaEgreso, setFechaEgreso] = useState(() => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return tomorrow.toISOString().split('T')[0];
+    });
     const [cantPersonas, setCantPersonas] = useState(1);
 
     // Form Data (Pre-filled from search)
