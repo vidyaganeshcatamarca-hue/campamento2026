@@ -98,6 +98,8 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const handleSubmit = async () => {
         console.log("Submit presionado", { fechaEgreso, foundCamper });
 
+        if (loading) return;
+
         if (!fechaEgreso) {
             toast.error('Ingrese fecha de egreso');
             return;
@@ -246,8 +248,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                             <Button
                                 type="button"
                                 onClick={handleSubmit}
-                                disabled={loading}
-                                className="w-full bg-[#E67E22] hover:bg-[#ca6f1e] text-white font-bold border-none"
+                                className={`w-full bg-[#E67E22] hover:bg-[#ca6f1e] text-white font-bold border-none ${loading ? 'opacity-70 cursor-wait' : ''}`}
                             >
                                 {loading ? 'Procesando...' : 'Crear Estadía e Ir a Check-in'} <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
