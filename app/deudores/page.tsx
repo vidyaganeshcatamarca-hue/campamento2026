@@ -38,6 +38,7 @@ export default function DeudoresPage() {
             let query = supabase
                 .from('vista_estadias_con_totales')
                 .select('*')
+                .eq('ingreso_confirmado', true) // IMPORTANTE: Solo ingresados (Fix para evitar reservas futuras)
                 .neq('estado_estadia', 'cancelada')
                 .neq('estado_estadia', 'reservada')
                 .gt('saldo_pendiente', 10); // Filtro base: solo con deuda real (> $10)
