@@ -694,10 +694,11 @@ export default function LiquidacionPage() {
                         {/* Vehículo */}
                         {hasVehicle && (
                             <div className="flex justify-between">
-                                <span className="text-muted">Vehículo ({vistaEstadia.tipo_vehiculo}): {diasEstadiaReal} días × {formatCurrency(vehiclePrice)}</span>
+                                <span className="text-muted">Vehículo ({vistaEstadia.tipo_vehiculo}): {diasEstadiaReal} días × {formatCurrency(vehPrice)}</span>
                                 <span>{formatCurrency(calcVehiculo)}</span>
                             </div>
                         )}
+
 
 
                         {/* Subtotal */}
