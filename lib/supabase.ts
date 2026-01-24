@@ -7,8 +7,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // TypeScript types based on your Supabase schema
 export interface Acampante {
-    id: string;
-    celular: string;
+    celular: string; // Primary Key
     nombre_completo: string;
     dni_pasaporte?: string;
     es_persona_riesgo?: boolean;
