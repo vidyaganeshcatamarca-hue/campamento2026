@@ -50,9 +50,9 @@ export const MJE_DESPEDIDA = `Hola, {{nombre_acampante}}.
 
 Esperamos que el regreso a casa sea tranquilo y que te lleves contigo un poquito de la paz de Nuestro Vrindavan. Para nosotros fue un gusto recibirte.
 Te invitamos a volver cuando gustes antes de que se termine!
-Tu opinión nos ayuda a seguir mejorando. Nos encantaría que nos regales 2 minutos para completar nuestra Encuesta de Satisfacción, donde podrás contarnos qué tal estuvo todo y compartir esa experiencia trascendental que viviste entre nosotros:
+Tu opinión nos ayuda a seguir mejorando. Si tienes sugerencias, no dudes en hacerlas para que podamos seguir mejorando.
 
-👉 Enlace https://forms.gle/5TmNnYuuC9gG5mR86
+
 
 
 ¡Vuelve pronto!🙏😊`;

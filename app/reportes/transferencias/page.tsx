@@ -32,47 +32,47 @@ export default function ReporteTransferenciasPage() {
     }, [fechaDesde, fechaHasta]);
 
     const fetchPagos = async () => {
-    setLoading(true);
-    try {
-        // Llamar a la función RPC que hace el JOIN correcto en el servidor
-        const { data: pagosData, error: pagosError } = await supabase
-            .rpc('get_transferencias_report', {
-                fecha_desde: fechaDesde,
-                fecha_hasta: fechaHasta
-            });
+        setLoading(true);
+        try {
+            // Llamar a la función RPC que hace el JOIN correcto en el servidor
+            const { data: pagosData, error: pagosError } = await supabase
+                .rpc('get_transferencias_report', {
+                    fecha_desde: fechaDesde,
+                    fecha_hasta: fechaHasta
+                });
 
-        if (pagosError) {
-            console.error("Error fetching pagos:", pagosError);
-            throw pagosError;
+            if (pagosError) {
+                console.error("Error fetching pagos:", pagosError);
+                throw pagosError;
+            }
+
+            if (!pagosData || pagosData.length === 0) {
+                setPagos([]);
+                return;
+            }
+
+            // Los datos ya vienen con el JOIN hecho correctamente
+            const pagosEnriquecidos = pagosData.map((pago: any) => ({
+                id: pago.pago_id,
+                monto_abonado: pago.monto_abonado,
+                fecha_pago: pago.fecha_pago,
+                metodo_pago: pago.metodo_pago,
+                estadia_id: pago.estadia_id,
+                responsable_nombre: pago.responsable_nombre,
+                responsable_dni: pago.responsable_dni,
+                responsable_celular: pago.responsable_celular,
+                recibo_emitido: pago.recibo_emitido
+            }));
+
+            setPagos(pagosEnriquecidos);
+
+        } catch (error) {
+            console.error('Error cargando reporte:', error);
+            toast.error('Error al cargar los pagos');
+        } finally {
+            setLoading(false);
         }
-
-        if (!pagosData || pagosData.length === 0) {
-            setPagos([]);
-            return;
-        }
-
-        // Los datos ya vienen con el JOIN hecho correctamente
-        const pagosEnriquecidos = pagosData.map((pago: any) => ({
-            id: pago.pago_id,
-            monto_abonado: pago.monto_abonado,
-            fecha_pago: pago.fecha_pago,
-            metodo_pago: pago.metodo_pago,
-            estadia_id: pago.estadia_id,
-            responsable_nombre: pago.responsable_nombre,
-            responsable_dni: pago.responsable_dni,
-            responsable_celular: pago.responsable_celular,
-            recibo_emitido: pago.recibo_emitido
-        }));
-
-        setPagos(pagosEnriquecidos);
-
-    } catch (error) {
-        console.error('Error cargando reporte:', error);
-        toast.error('Error al cargar los pagos');
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
     const handleToggleRecibo = async (id: number, current: boolean) => {
         // Optimistic UI update
@@ -97,12 +97,19 @@ export default function ReporteTransferenciasPage() {
         }
     };
 
+    const pagosFiltrados = pagos.filter(p =>
+        (p.recibo_emitido === false) && (
+            p.responsable_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+            (p.responsable_dni && p.responsable_dni.includes(busqueda))
+        )
+    );
+
     const handleExportar = () => {
-        // Filter out manual receipts per request
-        const pagosExportables = pagos.filter(p => p.recibo_emitido === false);
+        // Use the ALREADY filtered list (Respects: recibo_emitido=false, dates, and search)
+        const pagosExportables = pagosFiltrados;
 
         if (pagosExportables.length === 0) {
-            toast.error('No hay pagos pendientes de recibo para exportar.');
+            toast.error('No hay pagos en la lista actual para exportar.');
             return;
         }
 
@@ -113,11 +120,9 @@ export default function ReporteTransferenciasPage() {
             headers.join(','),
             ...pagosExportables.map(p => {
                 const fecha = new Date(p.fecha_pago).toLocaleDateString('es-AR');
-                // Force number format just in case
                 const monto = p.monto_abonado;
-                // Ensure name/dni match the enriched fields
                 const nombre = `"${p.responsable_nombre || 'Desconocido'}"`;
-                const dni = `"${p.responsable_dni || '-'}"`; // Quote DNI to prevent scientific notation if long
+                const dni = `"${p.responsable_dni || '-'}"`;
 
                 return [fecha, monto, nombre, dni].join(',');
             })
@@ -127,16 +132,11 @@ export default function ReporteTransferenciasPage() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
-        link.setAttribute('download', `reporte_transferencias_pendientes_${fechaDesde}_${fechaHasta}.csv`);
+        link.setAttribute('download', `reporte_transferencias_pendientes_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
-
-    const pagosFiltrados = pagos.filter(p =>
-        p.responsable_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (p.responsable_dni && p.responsable_dni.includes(busqueda))
-    );
 
     const totalPeriodo = pagosFiltrados.reduce((sum, p) => sum + p.monto_abonado, 0);
 
