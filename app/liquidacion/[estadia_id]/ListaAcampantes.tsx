@@ -23,7 +23,7 @@ export function ListaAcampantes({ acampantes, onCambiarACompanero }: ListaAcampa
                 <div className="space-y-3">
                     {acampantes.map(acampante => (
                         <div
-                            key={acampante.id}
+                            key={acampante.celular}
                             className="flex items-center justify-between p-3 bg-secondary/5 rounded-lg border border-gray-200"
                         >
                             <div className="flex-1">

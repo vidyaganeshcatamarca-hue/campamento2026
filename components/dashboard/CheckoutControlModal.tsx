@@ -77,7 +77,7 @@ export function CheckoutControlModal({ isOpen, onClose, overdueItems }: Checkout
                                         const isResponsable = item.persona.es_responsable_pago;
 
                                         return (
-                                            <tr key={item.persona.id || idx} className="hover:bg-gray-50/50">
+                                            <tr key={item.persona.celular || idx} className="hover:bg-gray-50/50">
                                                 <td className="p-3 font-medium text-gray-900">
                                                     {item.persona.nombre_completo}
                                                     {isResponsable && <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">Resp</span>}

@@ -162,7 +162,7 @@ export default function LiquidacionPage() {
             }
 
             await reasignarAcampante(
-                acompanteToReassign.id,
+                acompanteToReassign.celular,
                 celularResponsable,
                 estadiaDestino.id
             );

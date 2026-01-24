@@ -367,7 +367,7 @@ export default function DashboardPage() {
 
                                     return (
                                         <Card
-                                            key={item.persona.id || idx}
+                                            key={item.persona.celular || idx}
                                             className={cn(
                                                 "hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden border-t-4",
                                                 isOverdue ? "border-t-amber-500 bg-amber-50" : (isRisk ? "border-t-red-500" : "border-t-primary")
@@ -486,7 +486,7 @@ export default function DashboardPage() {
 
                                         return (
                                             <div
-                                                key={item.persona.id}
+                                                key={item.persona.celular}
                                                 className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 group"
                                             >
                                                 {/* Person Info */}

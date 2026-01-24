@@ -41,7 +41,7 @@ export function EditCamperModal({ isOpen, onClose, acampante }: EditCamperModalP
             const { error } = await supabase
                 .from('acampantes')
                 .update(formData)
-                .eq('id', acampante.id);
+                .eq('celular', acampante.celular);
 
             if (error) throw error;
 

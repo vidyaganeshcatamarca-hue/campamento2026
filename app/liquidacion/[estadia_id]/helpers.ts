@@ -2,9 +2,8 @@
 import { supabase } from '@/lib/supabase';
 
 export interface AcampanteReasign {
-    id: string;
     nombre_completo: string;
-    celular: string;
+    celular: string; // Primary Key
     es_responsable_pago: boolean;
 }
 
@@ -45,7 +44,7 @@ export async function cargarEstadiasActivas(estadiaIdActual: string) {
  * Reasigna un acampante de una estadía a otra
  */
 export async function reasignarAcampante(
-    acompanteId: string,
+    acompanteCelular: string,
     nuevoResponsableCelular: string,
     estadiaDestinoId: string
 ) {
@@ -56,7 +55,7 @@ export async function reasignarAcampante(
             celular_responsable: nuevoResponsableCelular,
             estadia_id: estadiaDestinoId
         })
-        .eq('id', acompanteId);
+        .eq('celular', acompanteCelular);
 
     if (error) throw error;
 }

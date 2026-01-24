@@ -95,7 +95,7 @@ export default function RecepcionPage() {
             router.push(`/checkin/${targetId}`);
         } else {
             console.error('Arribo sin ID:', arribo);
-            toast.error(`Error: No se encontró estadía para ${arribo.nombre_completo}. ID: ${arribo.id}`);
+            toast.error(`Error: No se encontró estadía para ${arribo.nombre_completo}. Cel: ${arribo.celular}`);
         }
     };
 
