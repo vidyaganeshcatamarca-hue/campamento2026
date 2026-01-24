@@ -122,14 +122,20 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (loading) return;
+        console.log('🚀 [DEBUG] handleSubmit iniciado');
+        if (loading) {
+            console.log('⚠️ [DEBUG] Ya está cargando, abortando');
+            return;
+        }
 
         if (!foundCamper || !foundCamper.celular) {
+            console.error('❌ [DEBUG] Camper no encontrado o sin celular');
             toast.error('Error: No se detectó el celular del acampante');
             return;
         }
 
         if (!fechaEgreso) {
+            console.error('❌ [DEBUG] Fecha egreso no definida');
             toast.error('Por favor, selecciona una fecha de egreso');
             return;
         }
@@ -143,30 +149,50 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             const diff = fOut.getTime() - fIn.getTime();
             const noches = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 
+            const newStayData = {
+                celular_responsable: foundCamper.celular,
+                fecha_ingreso: fIn.toISOString(),
+                fecha_egreso_programada: fOut.toISOString(),
+                cant_personas_total: cantPersonas || 1,
+                acumulado_noches_persona: noches * (cantPersonas || 1),
+                cant_parcelas_total: lastStay?.cant_parcelas_total || 1,
+                cant_sillas_total: lastStay?.cant_sillas_total || 0,
+                cant_mesas_total: lastStay?.cant_mesas_total || 0,
+                tipo_vehiculo: lastStay?.tipo_vehiculo || 'Ninguno',
+                estado_estadia: 'activa',
+                ingreso_confirmado: false,
+                observaciones: `Reingreso: ${formData.nombre_completo} (Herencia de data histórica)`
+            };
+
+            console.log('📡 [DEBUG] Intentando insertar estadía:', newStayData);
+
             // 1. Create New Stay inheriting historical values
-            const { data: estadia, error: estError } = await supabase
+            const { data: estadia, error: estError, status, statusText } = await supabase
                 .from('estadias')
-                .insert({
-                    celular_responsable: foundCamper.celular,
-                    fecha_ingreso: fIn.toISOString(),
-                    fecha_egreso_programada: fOut.toISOString(),
-                    cant_personas_total: cantPersonas || 1,
-                    acumulado_noches_persona: noches * (cantPersonas || 1),
-                    cant_parcelas_total: lastStay?.cant_parcelas_total || 1,
-                    cant_sillas_total: lastStay?.cant_sillas_total || 0,
-                    cant_mesas_total: lastStay?.cant_mesas_total || 0,
-                    tipo_vehiculo: lastStay?.tipo_vehiculo || 'Ninguno',
-                    estado_estadia: 'activa',
-                    ingreso_confirmado: false,
-                    observaciones: `Reingreso: ${formData.nombre_completo} (Herencia de data histórica)`
-                })
+                .insert(newStayData)
                 .select()
                 .single();
 
-            if (estError) throw estError;
+            console.log('📥 [DEBUG] Respuesta Supabase Estadia:', { estadia, estError, status, statusText });
+
+            if (estError) {
+                console.error('❌ [DEBUG] Error al insertar estadía:', estError);
+                toast.error(`Error Supabase: ${estError.message} (${estError.code})`);
+                alert(`ERROR SUPABASE (estadias): ${estError.message}\nCódigo: ${estError.code}\nStatus: ${status}`);
+                throw estError;
+            }
+
+            if (!estadia) {
+                console.error('❌ [DEBUG] Estadía creada pero retornó null');
+                toast.error('Error: La estadía se creó pero no devolvió datos');
+                throw new Error('Estadía retornó null');
+            }
+
+            console.log('✅ [DEBUG] Estadía creada exitosamente con ID:', estadia.id);
 
             // 2. Update Camper with the NEW stay ID
-            const { error: updateError } = await supabase
+            console.log('📡 [DEBUG] Intentando actualizar acampante:', foundCamper.celular, 'con estadia_id:', estadia.id);
+            const { error: updateError, status: uStatus } = await supabase
                 .from('acampantes')
                 .update({
                     estadia_id: estadia.id,
@@ -184,12 +210,19 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 })
                 .eq('celular', foundCamper.celular);
 
+            console.log('📥 [DEBUG] Respuesta Supabase Update Acampante:', { updateError, uStatus });
+
             if (updateError) {
+                console.error('❌ [DEBUG] Error al actualizar acampante:', updateError);
+                toast.error(`Error al vincular acampante: ${updateError.message}`);
+                alert(`ERROR SUPABASE (update acampantes): ${updateError.message}\nStatus: ${uStatus}`);
                 // Cleanup stay if update fails
+                console.log('🧹 [DEBUG] Limpiando estadía huérfana...');
                 await supabase.from('estadias').delete().eq('id', estadia.id);
                 throw updateError;
             }
 
+            console.log('🎉 [DEBUG] Todo completado con éxito');
             toast.dismiss(tid);
             toast.success('¡Reingreso exitoso!');
 
@@ -199,9 +232,10 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             }, 500);
 
         } catch (error: any) {
-            console.error("Error en Reingreso:", error);
+            console.error("❌ [DEBUG] Error general en catch:", error);
             toast.dismiss(tid);
-            toast.error(`Error: ${error.message}`);
+            toast.error(`Error crítico: ${error.message || 'Error desconocido'}`);
+            alert(`ERROR CRÍTICO: ${error.message}\n${JSON.stringify(error)}`);
             setLoading(false);
         }
     };
