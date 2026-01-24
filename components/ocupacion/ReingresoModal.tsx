@@ -57,19 +57,16 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const handleSearch = async () => {
         if (!celular || loading) return;
         setLoading(true);
-        console.log("Iniciando búsqueda para:", celular);
-
         try {
             const { data, error } = await supabase
                 .from('acampantes')
-                .select('*') // Forzando select * por seguridad
+                .select('*')
                 .eq('celular', celular.trim())
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
 
             if (error) {
-                console.error("Search error:", error);
                 if (error.code === 'PGRST116') {
                     toast.error('No se encontró acampante con ese celular');
                 } else {
@@ -77,11 +74,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 }
                 setFoundCamper(null);
             } else if (data) {
-                console.log("Camper encontrado:", data);
-
-                // --- DEBUG: Forzar ID si por alguna razón no viene en el primer nivel del objeto ---
-                if (!data.id && data.uuid) data.id = data.uuid;
-
                 setFoundCamper(data);
                 setFormData({
                     nombre_completo: data.nombre_completo || '',
@@ -100,7 +92,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             }
         } catch (e) {
             console.error(e);
-            toast.error('Error en la búsqueda rápida');
+            toast.error('Error en la búsqueda');
         } finally {
             setLoading(false);
         }
@@ -108,38 +100,22 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        // --- LOGS DE VERSION ---
-        const VERSION = "V5_ID_FIX";
-        console.log(`[${VERSION}] Submit click detectado`);
-
         if (loading) return;
 
-        // Intentar detectar el ID en diferentes posibles campos (aunque debería ser 'id')
-        const camperId = foundCamper?.id || foundCamper?.ID || foundCamper?.uuid;
-
-        // Validaciones críticas con ALERTAS para depurar en móvil/vercel
-        if (!foundCamper) {
-            window.alert(`[${VERSION}] ERROR: foundCamper es NULL`);
-            return;
-        }
-
-        if (!camperId) {
-            window.alert(`[${VERSION}] ERROR: No se detecta ID en el camper. Objeto completo: ` + JSON.stringify(foundCamper));
+        if (!foundCamper || !foundCamper.celular) {
+            toast.error('Error: No se detectó el celular del acampante');
             return;
         }
 
         if (!fechaEgreso) {
-            window.alert(`[${VERSION}] ERROR: Falta fecha de egreso`);
+            toast.error('Por favor, selecciona una fecha de egreso');
             return;
         }
 
-        window.alert(`[${VERSION}] OK: ID=${camperId}. Iniciando transacción...`);
         setLoading(true);
         const tid = toast.loading('Registrando reingreso...');
 
         try {
-            // Calcular noches
             const fIn = new Date(fechaIngreso + 'T12:00:00');
             const fOut = new Date(fechaEgreso + 'T12:00:00');
             const diff = fOut.getTime() - fIn.getTime();
@@ -164,7 +140,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
 
             if (estError) throw estError;
 
-            // 2. Actualizar Acampante
+            // 2. Actualizar Acampante usando CELULAR como clave primaria
             const { error: updateError } = await supabase
                 .from('acampantes')
                 .update({
@@ -181,10 +157,9 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
                 })
-                .eq('id', camperId); // Usar el ID detectado
+                .eq('celular', foundCamper.celular);
 
             if (updateError) {
-                // Rollback si falla el vínculo
                 await supabase.from('estadias').delete().eq('id', estadia.id);
                 throw updateError;
             }
@@ -192,18 +167,15 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             toast.dismiss(tid);
             toast.success('¡Reingreso exitoso!');
 
-            window.alert(`[${VERSION}] ¡EXITO! Redirigiendo a Check-in...`);
-
             setTimeout(() => {
                 onClose();
                 router.push(`/checkin/${estadia.id}`);
             }, 500);
 
         } catch (error: any) {
-            console.error("Error en proceso:", error);
+            console.error("Error en Reingreso:", error);
             toast.dismiss(tid);
             toast.error(`Error: ${error.message}`);
-            window.alert(`[${VERSION}] TRANSACTION FAILED: ` + error.message);
             setLoading(false);
         }
     };
