@@ -44,12 +44,16 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         medicacion: ''
     });
 
+    // State for historical stay
+    const [lastStay, setLastStay] = useState<any>(null);
+
     // Reset loading state safely
     useEffect(() => {
         setLoading(false);
         if (!isOpen) {
             setStep('search');
             setFoundCamper(null);
+            setLastStay(null);
             setCelular('');
         }
     }, [isOpen]);
@@ -58,35 +62,53 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         if (!celular || loading) return;
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            // 1. Fetch Camper
+            const { data: camper, error: camperError } = await supabase
                 .from('acampantes')
                 .select('*')
                 .eq('celular', celular.trim())
-                .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
 
-            if (error) {
-                if (error.code === 'PGRST116') {
+            if (camperError) {
+                if (camperError.code === 'PGRST116') {
                     toast.error('No se encontró acampante con ese celular');
                 } else {
-                    toast.error(`Error: ${error.message}`);
+                    toast.error(`Error: ${camperError.message}`);
                 }
                 setFoundCamper(null);
-            } else if (data) {
-                setFoundCamper(data);
+                return;
+            }
+
+            if (camper) {
+                setFoundCamper(camper);
                 setFormData({
-                    nombre_completo: data.nombre_completo || '',
-                    dni: data.dni_pasaporte || '',
-                    email: data.email || '',
-                    domicilio: data.domicilio || '',
-                    localidad: data.localidad || '',
-                    provincia: data.provincia || '',
-                    pais: data.pais || '',
-                    es_persona_riesgo: data.es_persona_riesgo || false,
-                    enfermedades: data.enfermedades || '',
-                    medicacion: data.medicacion || ''
+                    nombre_completo: camper.nombre_completo || '',
+                    dni: camper.dni_pasaporte || '',
+                    email: camper.email || '',
+                    domicilio: camper.domicilio || '',
+                    localidad: camper.localidad || '',
+                    provincia: camper.provincia || '',
+                    pais: camper.pais || '',
+                    es_persona_riesgo: camper.es_persona_riesgo || false,
+                    enfermedades: camper.enfermedades || '',
+                    medicacion: camper.medicacion || ''
                 });
+
+                // 2. Fetch Last Stay to inherit resources
+                const { data: stays, error: staysError } = await supabase
+                    .from('estadias')
+                    .select('*')
+                    .eq('celular_responsable', camper.celular)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (!staysError && stays && stays.length > 0) {
+                    setLastStay(stays[0]);
+                    setCantPersonas(stays[0].cant_personas_total || 1);
+                    console.log('Estadía previa recuperada:', stays[0]);
+                }
+
                 setStep('confirm');
                 toast.success('Datos recuperados correctamente');
             }
@@ -113,7 +135,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
         }
 
         setLoading(true);
-        const tid = toast.loading('Registrando reingreso...');
+        const tid = toast.loading('Registrando reingreso y creando estadía...');
 
         try {
             const fIn = new Date(fechaIngreso + 'T12:00:00');
@@ -121,7 +143,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
             const diff = fOut.getTime() - fIn.getTime();
             const noches = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 
-            // 1. Crear Nueva Estadía
+            // 1. Create New Stay inheriting historical values
             const { data: estadia, error: estError } = await supabase
                 .from('estadias')
                 .insert({
@@ -130,17 +152,20 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     fecha_egreso_programada: fOut.toISOString(),
                     cant_personas_total: cantPersonas || 1,
                     acumulado_noches_persona: noches * (cantPersonas || 1),
-                    cant_parcelas_total: 1,
+                    cant_parcelas_total: lastStay?.cant_parcelas_total || 1,
+                    cant_sillas_total: lastStay?.cant_sillas_total || 0,
+                    cant_mesas_total: lastStay?.cant_mesas_total || 0,
+                    tipo_vehiculo: lastStay?.tipo_vehiculo || 'Ninguno',
                     estado_estadia: 'activa',
                     ingreso_confirmado: false,
-                    observaciones: `Reingreso: ${formData.nombre_completo}`
+                    observaciones: `Reingreso: ${formData.nombre_completo} (Herencia de data histórica)`
                 })
                 .select()
                 .single();
 
             if (estError) throw estError;
 
-            // 2. Actualizar Acampante usando CELULAR como clave primaria
+            // 2. Update Camper with the NEW stay ID
             const { error: updateError } = await supabase
                 .from('acampantes')
                 .update({
@@ -160,6 +185,7 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 .eq('celular', foundCamper.celular);
 
             if (updateError) {
+                // Cleanup stay if update fails
                 await supabase.from('estadias').delete().eq('id', estadia.id);
                 throw updateError;
             }
