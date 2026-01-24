@@ -34,11 +34,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
     const [formData, setFormData] = useState({
         nombre_completo: '',
         dni: '',
-        email: '',
-        domicilio: '',
-        localidad: '',
-        provincia: '',
-        pais: '',
         es_persona_riesgo: false,
         enfermedades: '',
         medicacion: ''
@@ -85,11 +80,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                 setFormData({
                     nombre_completo: camper.nombre_completo || '',
                     dni: camper.dni_pasaporte || '',
-                    email: camper.email || '',
-                    domicilio: camper.domicilio || '',
-                    localidad: camper.localidad || '',
-                    provincia: camper.provincia || '',
-                    pais: camper.pais || '',
                     es_persona_riesgo: camper.es_persona_riesgo || false,
                     enfermedades: camper.enfermedades || '',
                     medicacion: camper.medicacion || ''
@@ -199,11 +189,6 @@ export function ReingresoModal({ isOpen, onClose }: ReingresoModalProps) {
                     es_responsable_pago: true,
                     nombre_completo: formData.nombre_completo,
                     dni_pasaporte: formData.dni,
-                    email: formData.email,
-                    domicilio: formData.domicilio,
-                    localidad: formData.localidad,
-                    provincia: formData.provincia,
-                    pais: formData.pais,
                     es_persona_riesgo: formData.es_persona_riesgo,
                     enfermedades: formData.enfermedades,
                     medicacion: formData.medicacion
