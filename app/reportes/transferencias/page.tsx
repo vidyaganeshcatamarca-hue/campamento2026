@@ -21,8 +21,17 @@ export default function ReporteTransferenciasPage() {
     useEffect(() => {
         const hoy = new Date();
         const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        setFechaDesde(inicioMes.toISOString().split('T')[0]);
-        setFechaHasta(hoy.toISOString().split('T')[0]);
+
+        // Helper to get local date YYYY-MM-DD regardless of UTC shift
+        const toLocalDateString = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        setFechaDesde(toLocalDateString(inicioMes));
+        setFechaHasta(toLocalDateString(hoy));
     }, []);
 
     useEffect(() => {
@@ -34,11 +43,12 @@ export default function ReporteTransferenciasPage() {
     const fetchPagos = async () => {
         setLoading(true);
         try {
-            // Llamar a la función RPC que hace el JOIN correcto en el servidor
+            // Use T00:00:00 and T23:59:59 to make the range inclusive of the whole day.
+            // This ensures payments made late in the day (like those in the screenshot) match.
             const { data: pagosData, error: pagosError } = await supabase
                 .rpc('get_transferencias_report', {
-                    fecha_desde: fechaDesde,
-                    fecha_hasta: fechaHasta
+                    fecha_desde: `${fechaDesde}T00:00:00`,
+                    fecha_hasta: `${fechaHasta}T23:59:59`
                 });
 
             if (pagosError) {
