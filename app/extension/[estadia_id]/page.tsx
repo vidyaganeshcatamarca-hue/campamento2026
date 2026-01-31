@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase, VistaEstadiaConTotales, Acampante } from '@/lib/supabase';
+import { enviarReciboPago } from '@/lib/whatsapp';
 import { Layout } from '@/components/ui/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -161,6 +162,26 @@ export default function ExtensionPage() {
                     });
 
                 if (pagoError) throw pagoError;
+
+                // 3. Enviar Recibo por WhatsApp
+                if (responsable) {
+                    const telefono = responsable.celular.replace(/\D/g, '');
+                    const nuevoSaldo = (estadia.saldo_pendiente || 0) + (calculo.costoExtension || 0) - montoAbonar;
+
+                    try {
+                        await enviarReciboPago(
+                            telefono,
+                            responsable.nombre_completo,
+                            montoAbonar,
+                            nuevoSaldo,
+                            metodoPago
+                        );
+                        toast.success('Recibo enviado por WhatsApp');
+                    } catch (waError) {
+                        console.error('Error enviando WhatsApp:', waError);
+                        toast.error('Pago registrado, pero falló el envío del recibo');
+                    }
+                }
             }
 
             toast.success('Estadía extendida correctamente');
