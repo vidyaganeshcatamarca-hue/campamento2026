@@ -69,12 +69,34 @@ export default function DeudoresPage() {
 
                 // Solo agregar si existe un responsable de pago definido
                 if (responsable) {
-                    deudoresInfo.push({
+                    const deudorItem = {
                         estadia,
                         responsable: responsable,
-                    });
+                    };
 
-                    total += (estadia.saldo_pendiente || 0);
+                    // Check for group balance if debt matches a known pattern or always?
+                    // Better: Check if this person has other stays with surplus that cover this debt
+                    const { data: linkedStays } = await supabase
+                        .from('vista_estadias_con_totales')
+                        .select('saldo_pendiente')
+                        .eq('celular_responsable', estadia.celular_responsable)
+                        .neq('id', estadia.id)
+                        .neq('estado_estadia', 'cancelada');
+
+                    let saldoNeto = estadia.saldo_pendiente;
+                    if (linkedStays && linkedStays.length > 0) {
+                        const surplus = linkedStays.reduce((acc, s) => acc + s.saldo_pendiente, 0);
+                        saldoNeto += surplus;
+                    }
+
+                    // Only add if NET debt is positive
+                    if (saldoNeto > 10) {
+                        deudoresInfo.push(deudorItem);
+                        total += (estadia.saldo_pendiente || 0); // Keep showing the specific stay debt or net? 
+                        // Start straightforward: if net is covered, don't show at all.
+                        // If not covered, show the specific stay debt but maybe warn?
+                        // User request implies they shouldn't appear.
+                    }
                 }
             }
 

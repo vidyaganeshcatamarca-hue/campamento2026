@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ArrowLeft, DollarSign, Receipt, CreditCard } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
 
 export default function SaldoPage() {
@@ -283,8 +283,16 @@ export default function SaldoPage() {
                                     </div>
                                 ))}
                                 <div className="border-t border-amber-200 pt-2 mt-2 flex justify-between font-bold text-amber-900">
-                                    <span>Total Deuda Grupal:</span>
+                                    <span>Total Consumo Grupo:</span>
                                     <span>{formatCurrency(totalFinal)}</span>
+                                </div>
+                                <div className="flex justify-between font-medium text-green-700">
+                                    <span>Total Pagado:</span>
+                                    <span>-{formatCurrency(totalPagado)}</span>
+                                </div>
+                                <div className={cn("flex justify-between font-bold text-lg pt-2 border-t border-amber-200 mt-1", saldoPendiente > 0 ? "text-red-600" : "text-green-700")}>
+                                    <span>Saldo Pendiente Grupo:</span>
+                                    <span>{formatCurrency(Math.max(0, saldoPendiente))}</span>
                                 </div>
                             </div>
                         </CardContent>
