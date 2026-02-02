@@ -35,76 +35,87 @@ export default function DeudoresPage() {
     const fetchDeudores = async () => {
         setLoading(true);
         try {
+            // 1. Obtener candidatos (gente con deuda en alguna estadía)
             let query = supabase
                 .from('vista_estadias_con_totales')
                 .select('*')
-                .eq('ingreso_confirmado', true) // IMPORTANTE: Solo ingresados (Fix para evitar reservas futuras)
+                .eq('ingreso_confirmado', true)
                 .neq('estado_estadia', 'cancelada')
                 .neq('estado_estadia', 'reservada')
-                .gt('saldo_pendiente', 10); // Filtro base: solo con deuda real (> $10)
+                .gt('saldo_pendiente', 10);
 
-            // Aplicar filtros de estado
-            if (filtro === 'activos') {
-                query = query.eq('estado_estadia', 'activa');
-            } else if (filtro === 'finalizados') {
-                query = query.eq('estado_estadia', 'finalizada');
-            }
-            // 'todos' implica activa OR finalizada (ya filtrados cancelada/reservada arriba)
+            if (filtro === 'activos') query = query.eq('estado_estadia', 'activa');
+            else if (filtro === 'finalizados') query = query.eq('estado_estadia', 'finalizada');
 
-            const { data: estadiasData, error } = await query;
+            const { data: candidatos, error } = await query;
             if (error) throw error;
 
-            // Construir lista final usando saldo_pendiente directo de la vista (Igual que Dashboard)
+            if (!candidatos || candidatos.length === 0) {
+                setDeudores([]);
+                setTotalAdeudado(0);
+                return;
+            }
+
+            // 2. Obtener TODAS las estadías relacionadas a estos responsables para neto grupal
+            const telefonos = [...new Set(candidatos.map(c => c.celular_responsable))];
+
+            const { data: gruposCompleto, error: grupoError } = await supabase
+                .from('vista_estadias_con_totales')
+                .select('id, celular_responsable, saldo_pendiente, estadia_id:id') // Seleccionamos lo necesario
+                .in('celular_responsable', telefonos)
+                .neq('estado_estadia', 'cancelada');
+
+            if (grupoError) throw grupoError;
+
+            // 3. Calcular balances netos por responsable
+            const balancePorResponsable: Record<string, number> = {};
+            gruposCompleto?.forEach(g => {
+                const tel = g.celular_responsable || 'unknown';
+                balancePorResponsable[tel] = (balancePorResponsable[tel] || 0) + (g.saldo_pendiente || 0);
+            });
+
+            // 4. Filtrar y construir lista final
             const deudoresInfo: DeudorInfo[] = [];
-            let total = 0;
+            let totalGeneral = 0;
+            const procesados = new Set<string>(); // Para evitar duplicados si un responsable tiene 2 estadías con deuda
 
-            for (const estadia of estadiasData || []) {
-                // Obtener datos del responsable
-                const { data: responsable } = await supabase
-                    .from('acampantes')
-                    .select('*')
-                    .eq('estadia_id', estadia.id)
-                    .eq('es_responsable_pago', true)
-                    .single();
+            for (const item of candidatos) {
+                const tel = item.celular_responsable || 'unknown';
+                const saldoNeto = balancePorResponsable[tel] || 0;
 
-                // Solo agregar si existe un responsable de pago definido
-                if (responsable) {
-                    const deudorItem = {
-                        estadia,
-                        responsable: responsable,
-                    };
+                // Solo si el SALDO NETO del grupo es deuda (> 100 por margen)
+                // Y no hemos procesado a este responsable ya (se muestra una vez por grupo o por estadía?)
+                // Si mostramos por estadía, mostramos solo si el grupo debe.
+                // Pero si el grupo debe, ¿qué estadía mostramos? ¿La que tiene deuda?
 
-                    // Check for group balance if debt matches a known pattern or always?
-                    // Better: Check if this person has other stays with surplus that cover this debt
-                    const { data: linkedStays } = await supabase
-                        .from('vista_estadias_con_totales')
-                        .select('saldo_pendiente')
-                        .eq('celular_responsable', estadia.celular_responsable)
-                        .neq('id', estadia.id)
-                        .neq('estado_estadia', 'cancelada');
+                if (saldoNeto > 100) {
+                    // Obtener datos del responsable (cachear si es posible, pero son pocos)
+                    const { data: responsable } = await supabase
+                        .from('acampantes')
+                        .select('*')
+                        .eq('estadia_id', item.id)
+                        .eq('es_responsable_pago', true)
+                        .single();
 
-                    let saldoNeto = estadia.saldo_pendiente;
-                    if (linkedStays && linkedStays.length > 0) {
-                        const surplus = linkedStays.reduce((acc, s) => acc + s.saldo_pendiente, 0);
-                        saldoNeto += surplus;
-                    }
+                    if (responsable) {
+                        // Modificar el objeto estadía para reflejar el saldo neto? 
+                        // Ojo: Si modificamos saldo_pendiente visualmente, puede confundir con el real.
+                        // Mejor mostrar la estadía deudora, pero saber que es deuda legítima.
 
-                    // Only add if NET debt is positive
-                    if (saldoNeto > 10) {
-                        deudoresInfo.push(deudorItem);
-                        total += (estadia.saldo_pendiente || 0); // Keep showing the specific stay debt or net? 
-                        // Start straightforward: if net is covered, don't show at all.
-                        // If not covered, show the specific stay debt but maybe warn?
-                        // User request implies they shouldn't appear.
+                        deudoresInfo.push({
+                            estadia: item,
+                            responsable: responsable,
+                        });
+                        totalGeneral += (item.saldo_pendiente || 0); // Sumamos lo que debe ESTA estadía al total general listado
                     }
                 }
             }
 
-            // Ordenar por mayor deuda
+            // Ordenar por deuda
             deudoresInfo.sort((a, b) => b.estadia.saldo_pendiente - a.estadia.saldo_pendiente);
 
             setDeudores(deudoresInfo);
-            setTotalAdeudado(total);
+            setTotalAdeudado(totalGeneral);
 
         } catch (error) {
             console.error('Error:', error);
