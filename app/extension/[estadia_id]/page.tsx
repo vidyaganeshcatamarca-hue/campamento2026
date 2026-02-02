@@ -160,238 +160,237 @@ export default function ExtensionPage() {
         try {
             // 1. Actualizar Estadía (Fecha Egreso + Acumulado Noches)
             // IMPORTANTE: Sumar días adicionales al acumulado para que la Vista recalcule el total
-            const { error: updateError } = await supabase
-                .from('estadias')
                 .update({
-                    fecha_egreso_programada: getNoonTimestamp(new Date(nuevaFecha + 'T12:00:00')),
-                    acumulado_noches_persona: estadia.acumulado_noches_persona + calculo.diasAdicionales
-                })
-                .eq('id', estadiaId);
+            fecha_egreso_programada: getNoonTimestamp(new Date(nuevaFecha + 'T12:00:00')),
+            // FIX: Multiply days by person count to accumulate correct person-nights for the group
+            acumulado_noches_persona: estadia.acumulado_noches_persona + (calculo.diasAdicionales * estadia.cant_personas_total)
+        })
+        .eq('id', estadiaId);
 
-            if (updateError) throw updateError;
+    if (updateError) throw updateError;
 
-            // 2. Registrar Pago (si corresponde)
-            if (metodoPago !== 'cuenta' && montoAbonar > 0) {
-                const { error: pagoError } = await supabase
-                    .from('pagos')
-                    .insert({
-                        estadia_id: estadiaId,
-                        monto_abonado: montoAbonar,
-                        metodo_pago: metodoPago,
-                        fecha_pago: new Date().toISOString() // TODO: check timezone if needed
-                    });
+    // 2. Registrar Pago (si corresponde)
+    if (metodoPago !== 'cuenta' && montoAbonar > 0) {
+        const { error: pagoError } = await supabase
+            .from('pagos')
+            .insert({
+                estadia_id: estadiaId,
+                monto_abonado: montoAbonar,
+                metodo_pago: metodoPago,
+                fecha_pago: new Date().toISOString() // TODO: check timezone if needed
+            });
 
-                if (pagoError) throw pagoError;
+        if (pagoError) throw pagoError;
 
-                // 3. Enviar Recibo por WhatsApp
-                if (responsable) {
-                    const telefono = responsable.celular.replace(/\D/g, '');
-                    const nuevoSaldo = (estadia.saldo_pendiente || 0) + (calculo.costoExtension || 0) - montoAbonar;
+        // 3. Enviar Recibo por WhatsApp
+        if (responsable) {
+            const telefono = responsable.celular.replace(/\D/g, '');
+            const nuevoSaldo = (estadia.saldo_pendiente || 0) + (calculo.costoExtension || 0) - montoAbonar;
 
-                    try {
-                        await enviarReciboPago(
-                            telefono,
-                            responsable.nombre_completo,
-                            montoAbonar,
-                            nuevoSaldo,
-                            metodoPago
-                        );
-                        toast.success('Recibo enviado por WhatsApp');
-                    } catch (waError) {
-                        console.error('Error enviando WhatsApp:', waError);
-                        toast.error('Pago registrado, pero falló el envío del recibo');
-                    }
-                }
+            try {
+                await enviarReciboPago(
+                    telefono,
+                    responsable.nombre_completo,
+                    montoAbonar,
+                    nuevoSaldo,
+                    metodoPago
+                );
+                toast.success('Recibo enviado por WhatsApp');
+            } catch (waError) {
+                console.error('Error enviando WhatsApp:', waError);
+                toast.error('Pago registrado, pero falló el envío del recibo');
             }
-
-            toast.success('Estadía extendida correctamente');
-            router.push('/dashboard');
-
-        } catch (error) {
-            console.error('Error al extender:', error);
-            toast.error('Error al guardar cambios');
-        } finally {
-            setSaving(false);
         }
+    }
+
+    toast.success('Estadía extendida correctamente');
+    router.push('/dashboard');
+
+} catch (error) {
+    console.error('Error al extender:', error);
+    toast.error('Error al guardar cambios');
+} finally {
+    setSaving(false);
+}
     };
 
-    if (loading) return <Layout><div className="text-center py-12">Cargando...</div></Layout>;
-    if (!estadia) return <Layout><div className="text-center py-12">No encontrado</div></Layout>;
+if (loading) return <Layout><div className="text-center py-12">Cargando...</div></Layout>;
+if (!estadia) return <Layout><div className="text-center py-12">No encontrado</div></Layout>;
 
-    const calculo = calcularCostoExtension();
-    const fechaMinima = new Date(estadia.fecha_egreso_programada).toISOString().split('T')[0];
-    const saldoActual = estadia.saldo_pendiente;
-    const nuevoSaldoTotal = saldoActual + (calculo?.costoExtension || 0) - (metodoPago !== 'cuenta' ? montoAbonar : 0);
+const calculo = calcularCostoExtension();
+const fechaMinima = new Date(estadia.fecha_egreso_programada).toISOString().split('T')[0];
+const saldoActual = estadia.saldo_pendiente;
+const nuevoSaldoTotal = saldoActual + (calculo?.costoExtension || 0) - (metodoPago !== 'cuenta' ? montoAbonar : 0);
 
-    return (
-        <Layout>
-            <div className="space-y-6 max-w-3xl mx-auto pb-20">
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-6">
-                    <Button variant="outline" size="sm" onClick={() => router.back()}>
-                        <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                    <div>
-                        <h1 className="text-2xl font-bold text-primary">Extender Estadía</h1>
-                        <p className="text-muted text-sm">{responsable?.nombre_completo}</p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Columna Izquierda: Selección */}
-                    <div className="space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Nueva Fecha</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800 border border-blue-100">
-                                        <span className="block font-semibold">Egreso Programado Actual:</span>
-                                        {new Date(estadia.fecha_egreso_programada).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium block mb-2">Seleccionar Nueva Fecha Salida</label>
-                                        <input
-                                            type="date"
-                                            value={nuevaFecha}
-                                            onChange={(e) => setNuevaFecha(e.target.value)}
-                                            min={fechaMinima}
-                                            className="input text-lg w-full"
-                                        />
-                                        {calculo?.puedeExtender && (
-                                            <p className="text-sm text-green-600 font-medium mt-2">
-                                                + {calculo.diasAdicionales} días adicionales
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {calculo?.puedeExtender && (
-                            <Card className="border-2 border-primary/20 bg-primary/5">
-                                <CardHeader>
-                                    <CardTitle>Costo de Extensión</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span>Días adicionales ({calculo.diasAdicionales}) x Costo Diario</span>
-                                            <span>{formatCurrency(calculo.costoExtension)}</span>
-                                        </div>
-                                        <div className="h-px bg-primary/20 my-2"></div>
-                                        <div className="flex justify-between font-bold text-lg text-primary">
-                                            <span>Total a Sumar</span>
-                                            <span>{formatCurrency(calculo.costoExtension)}</span>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
-
-                    {/* Columna Derecha: Pago y Confirmación */}
-                    <div className="space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Forma de Pago</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid grid-cols-3 gap-2">
-                                    <button
-                                        onClick={() => { setMetodoPago('efectivo'); setMontoAbonar(calculo?.costoExtension || 0); }}
-                                        className={cn(
-                                            "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
-                                            metodoPago === 'efectivo'
-                                                ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
-                                                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                                        )}
-                                    >
-                                        Efectivo
-                                    </button>
-                                    <button
-                                        onClick={() => { setMetodoPago('transferencia'); setMontoAbonar(calculo?.costoExtension || 0); }}
-                                        className={cn(
-                                            "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
-                                            metodoPago === 'transferencia'
-                                                ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
-                                                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                                        )}
-                                    >
-                                        Transfer
-                                    </button>
-                                    <button
-                                        onClick={() => { setMetodoPago('cuenta'); setMontoAbonar(0); }}
-                                        className={cn(
-                                            "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
-                                            metodoPago === 'cuenta'
-                                                ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
-                                                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                                        )}
-                                    >
-                                        A Cuenta
-                                    </button>
-                                </div>
-
-                                {metodoPago !== 'cuenta' && (
-                                    <div className="pt-2 animate-in slide-in-from-top-2">
-                                        <label className="text-sm font-medium block mb-2">Monto a Abonar Ahora</label>
-                                        <div className="relative">
-                                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                            <input
-                                                type="number"
-                                                value={montoAbonar}
-                                                onChange={(e) => setMontoAbonar(Number(e.target.value))}
-                                                className="input pl-9"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Resumen Financiero</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <div className="flex justify-between text-muted">
-                                    <span>Saldo Pendiente Actual</span>
-                                    <span>{formatCurrency(saldoActual)}</span>
-                                </div>
-                                <div className="flex justify-between text-primary font-medium">
-                                    <span>+ Costo Extensión</span>
-                                    <span>{formatCurrency(calculo?.costoExtension || 0)}</span>
-                                </div>
-                                {metodoPago !== 'cuenta' && (
-                                    <div className="flex justify-between text-green-600 font-medium">
-                                        <span>- Pago Inmediato</span>
-                                        <span>{formatCurrency(montoAbonar)}</span>
-                                    </div>
-                                )}
-                                <div className="h-px bg-gray-100 my-2"></div>
-                                <div className={cn("flex justify-between font-bold text-lg", nuevoSaldoTotal > 0 ? "text-red-500" : "text-green-600")}>
-                                    <span>Nuevo Saldo Final</span>
-                                    <span>{formatCurrency(nuevoSaldoTotal)}</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Button
-                            className="w-full h-12 text-lg"
-                            disabled={saving || !calculo?.puedeExtender}
-                            onClick={handleConfirmar}
-                        >
-                            <Save className="w-5 h-5 mr-2" />
-                            {saving ? 'Procesando...' : 'Confirmar Extensión'}
-                        </Button>
-                    </div>
+return (
+    <Layout>
+        <div className="space-y-6 max-w-3xl mx-auto pb-20">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+                <Button variant="outline" size="sm" onClick={() => router.back()}>
+                    <ArrowLeft className="w-4 h-4" />
+                </Button>
+                <div>
+                    <h1 className="text-2xl font-bold text-primary">Extender Estadía</h1>
+                    <p className="text-muted text-sm">{responsable?.nombre_completo}</p>
                 </div>
             </div>
-        </Layout>
-    );
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Columna Izquierda: Selección */}
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Nueva Fecha</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800 border border-blue-100">
+                                    <span className="block font-semibold">Egreso Programado Actual:</span>
+                                    {new Date(estadia.fecha_egreso_programada).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium block mb-2">Seleccionar Nueva Fecha Salida</label>
+                                    <input
+                                        type="date"
+                                        value={nuevaFecha}
+                                        onChange={(e) => setNuevaFecha(e.target.value)}
+                                        min={fechaMinima}
+                                        className="input text-lg w-full"
+                                    />
+                                    {calculo?.puedeExtender && (
+                                        <p className="text-sm text-green-600 font-medium mt-2">
+                                            + {calculo.diasAdicionales} días adicionales
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {calculo?.puedeExtender && (
+                        <Card className="border-2 border-primary/20 bg-primary/5">
+                            <CardHeader>
+                                <CardTitle>Costo de Extensión</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Días adicionales ({calculo.diasAdicionales}) x Costo Diario</span>
+                                        <span>{formatCurrency(calculo.costoExtension)}</span>
+                                    </div>
+                                    <div className="h-px bg-primary/20 my-2"></div>
+                                    <div className="flex justify-between font-bold text-lg text-primary">
+                                        <span>Total a Sumar</span>
+                                        <span>{formatCurrency(calculo.costoExtension)}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+
+                {/* Columna Derecha: Pago y Confirmación */}
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Forma de Pago</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={() => { setMetodoPago('efectivo'); setMontoAbonar(calculo?.costoExtension || 0); }}
+                                    className={cn(
+                                        "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
+                                        metodoPago === 'efectivo'
+                                            ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
+                                            : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                                    )}
+                                >
+                                    Efectivo
+                                </button>
+                                <button
+                                    onClick={() => { setMetodoPago('transferencia'); setMontoAbonar(calculo?.costoExtension || 0); }}
+                                    className={cn(
+                                        "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
+                                        metodoPago === 'transferencia'
+                                            ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
+                                            : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                                    )}
+                                >
+                                    Transfer
+                                </button>
+                                <button
+                                    onClick={() => { setMetodoPago('cuenta'); setMontoAbonar(0); }}
+                                    className={cn(
+                                        "p-3 border rounded-lg text-sm font-bold transition-all shadow-sm",
+                                        metodoPago === 'cuenta'
+                                            ? "bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300"
+                                            : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                                    )}
+                                >
+                                    A Cuenta
+                                </button>
+                            </div>
+
+                            {metodoPago !== 'cuenta' && (
+                                <div className="pt-2 animate-in slide-in-from-top-2">
+                                    <label className="text-sm font-medium block mb-2">Monto a Abonar Ahora</label>
+                                    <div className="relative">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="number"
+                                            value={montoAbonar}
+                                            onChange={(e) => setMontoAbonar(Number(e.target.value))}
+                                            className="input pl-9"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Resumen Financiero</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                            <div className="flex justify-between text-muted">
+                                <span>Saldo Pendiente Actual</span>
+                                <span>{formatCurrency(saldoActual)}</span>
+                            </div>
+                            <div className="flex justify-between text-primary font-medium">
+                                <span>+ Costo Extensión</span>
+                                <span>{formatCurrency(calculo?.costoExtension || 0)}</span>
+                            </div>
+                            {metodoPago !== 'cuenta' && (
+                                <div className="flex justify-between text-green-600 font-medium">
+                                    <span>- Pago Inmediato</span>
+                                    <span>{formatCurrency(montoAbonar)}</span>
+                                </div>
+                            )}
+                            <div className="h-px bg-gray-100 my-2"></div>
+                            <div className={cn("flex justify-between font-bold text-lg", nuevoSaldoTotal > 0 ? "text-red-500" : "text-green-600")}>
+                                <span>Nuevo Saldo Final</span>
+                                <span>{formatCurrency(nuevoSaldoTotal)}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Button
+                        className="w-full h-12 text-lg"
+                        disabled={saving || !calculo?.puedeExtender}
+                        onClick={handleConfirmar}
+                    >
+                        <Save className="w-5 h-5 mr-2" />
+                        {saving ? 'Procesando...' : 'Confirmar Extensión'}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    </Layout>
+);
 }
 
 function cn(...classes: (string | undefined | null | boolean)[]) {
