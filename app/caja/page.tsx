@@ -67,15 +67,25 @@ export default function CajaPage() {
             setPagosPorMetodo(metodosMap);
 
             // Total adeudado (personas ingresadas con saldo pendiente)
-            // FIX: Coincidir con Dashboard (Solo Activas, sin filtro > 0 para incluir saldos negativos/créditos)
+            // FIX: Coincidir con Dashboard y Deudores (Solo Activas, Saldo Neto Grupal)
             const { data: estadiasData } = await supabase
                 .from('vista_estadias_con_totales')
-                .select('saldo_pendiente')
+                .select('saldo_pendiente, celular_responsable')
                 .eq('ingreso_confirmado', true)
-                .eq('estado_estadia', 'activa'); // Match Dashboard Logic exactly
-            // .gt('saldo_pendiente', 0); // REMOVED: Dashboard sums everything including negative balances
+                .eq('estado_estadia', 'activa');
 
-            const deuda = estadiasData?.reduce((sum, e) => sum + e.saldo_pendiente, 0) || 0;
+            // Calcular deuda neta por responsable
+            const balancePorResponsable: Record<string, number> = {};
+            estadiasData?.forEach(e => {
+                const tel = e.celular_responsable || 'unknown';
+                balancePorResponsable[tel] = (balancePorResponsable[tel] || 0) + (e.saldo_pendiente || 0);
+            });
+
+            // Solo sumar si el saldo NETO del grupo es deuda
+            const deuda = Object.values(balancePorResponsable).reduce((sum, netBalance) => {
+                return sum + (netBalance > 10 ? netBalance : 0);
+            }, 0);
+
             setTotalAdeudado(deuda);
 
             // Promedio por estadía
