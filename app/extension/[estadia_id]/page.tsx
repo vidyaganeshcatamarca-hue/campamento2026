@@ -52,6 +52,26 @@ export default function ExtensionPage() {
             if (respError) throw respError;
             setResponsable(resp);
 
+            // Fetch REAL count of acampantes to ensure accurate calculation
+            // This fixes the bug where stored cant_personas_total might be stale/incorrect
+            const { count: realCount, error: countError } = await supabase
+                .from('acampantes')
+                .select('*', { count: 'exact', head: true })
+                .eq('estadia_id', estadiaId);
+
+            if (!countError && realCount !== null && vista) {
+                // Override the value in the view object with the real count (at least 1 if responsible exists)
+                // NOTE: If realCount is 0 for some reason (data inconsistency), fallback to view's value or 1
+                const finalCount = realCount > 0 ? realCount : (vista.cant_personas_total || 1);
+
+                setEstadia({
+                    ...vista,
+                    cant_personas_total: finalCount
+                });
+            } else {
+                setEstadia(vista);
+            }
+
             // Fix: Ensure we use the exact date string from DB, avoiding timezone shifts
             // Assuming fecha_egreso_programada is ISO string, we want the date part locally or as stored
             const fechaEgreso = new Date(vista.fecha_egreso_programada);
