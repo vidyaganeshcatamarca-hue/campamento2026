@@ -22,6 +22,10 @@ export default function ExtensionPage() {
     const [estadia, setEstadia] = useState<VistaEstadiaConTotales | null>(null);
     const [responsable, setResponsable] = useState<Acampante | null>(null);
 
+    // Group Extension State
+    const [isGroupExtension, setIsGroupExtension] = useState(false);
+    const [groupMembers, setGroupMembers] = useState<VistaEstadiaConTotales[]>([]);
+
     // Estados de Formulario
     const [nuevaFecha, setNuevaFecha] = useState('');
     const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'cuenta'>('cuenta');
@@ -33,6 +37,7 @@ export default function ExtensionPage() {
 
     const fetchData = async () => {
         try {
+            // 1. Fetch Current Stay
             const { data: vista, error: vistaError } = await supabase
                 .from('vista_estadias_con_totales')
                 .select('*')
@@ -42,6 +47,7 @@ export default function ExtensionPage() {
             if (vistaError) throw vistaError;
             setEstadia(vista);
 
+            // 2. Fetch Responsible
             const { data: resp, error: respError } = await supabase
                 .from('acampantes')
                 .select('*')
@@ -52,11 +58,23 @@ export default function ExtensionPage() {
             if (respError) throw respError;
             setResponsable(resp);
 
-            // Fix: Ensure we use the exact date string from DB, avoiding timezone shifts
-            // Assuming fecha_egreso_programada is ISO string, we want the date part locally or as stored
+            // 3. Fetch Group Members (Same Responsible, Active)
+            if (vista.celular_responsable) {
+                const { data: groupData, error: groupError } = await supabase
+                    .from('vista_estadias_con_totales')
+                    .select('*')
+                    .eq('celular_responsable', vista.celular_responsable)
+                    .neq('estado_estadia', 'cancelada');
+
+                if (!groupError && groupData && groupData.length > 1) {
+                    setGroupMembers(groupData);
+                    // Optional: Auto-check if user prefers
+                    // setIsGroupExtension(true); 
+                }
+            }
+
+            // Fix: Ensure we use the exact date string from DB
             const fechaEgreso = new Date(vista.fecha_egreso_programada);
-            // Adjust to local date string yyyy-mm-dd
-            // Best way: use the string part if it matches, or force local
             const fechaString = new Date(fechaEgreso.getTime() + fechaEgreso.getTimezoneOffset() * 60000)
                 .toISOString().split('T')[0];
 
@@ -70,66 +88,83 @@ export default function ExtensionPage() {
         }
     };
 
+    const calculateSingleCost = (stay: VistaEstadiaConTotales, newDateStr: string) => {
+        const fechaEgresoNueva = new Date(newDateStr + 'T12:00:00');
+        const fechaEgresoActual = new Date(stay.fecha_egreso_programada);
+        const diffTime = fechaEgresoNueva.getTime() - fechaEgresoActual.getTime();
+        const diasAdicionales = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diasAdicionales <= 0) return { dias: 0, cost: 0, daily: 0 };
+
+        const assignedName = (stay.parcela_asignada || '').toLowerCase();
+        const isHabitacionName = assignedName.includes('cama') || assignedName.includes('habitacion') || assignedName.includes('habitación');
+        const isHabitacion = stay.cant_camas > 0 || (stay as any).es_habitacion || isHabitacionName;
+
+        const costoPersonaDiario = isHabitacion
+            ? (stay.cant_personas_total || 0) * stay.p_cama
+            : (stay.cant_personas_total || 0) * stay.p_persona;
+
+        const costoParcelaDiario = isHabitacion
+            ? 0
+            : (stay.cant_parcelas_total || 0) * stay.p_parcela;
+
+        const hasVehicle = stay.tipo_vehiculo && stay.tipo_vehiculo.toLowerCase() !== 'ninguno';
+        const vehiclePrice = stay.tipo_vehiculo?.toLowerCase().includes('moto')
+            ? (stay.p_moto || 0)
+            : (stay.p_vehiculo || 0);
+
+        const costoExtrasDiario =
+            (stay.cant_sillas_total || 0) * stay.p_silla +
+            (stay.cant_mesas_total || 0) * stay.p_mesa +
+            (hasVehicle ? vehiclePrice : 0);
+
+        const dailyTotal = costoPersonaDiario + costoParcelaDiario + costoExtrasDiario;
+        return {
+            dias: diasAdicionales,
+            cost: diasAdicionales * dailyTotal,
+            daily: dailyTotal
+        };
+    };
+
     const calcularCostoExtension = () => {
         if (!estadia || !nuevaFecha) return null;
 
-        // Parse inputs as noon to avoid boundary issues
-        const fechaEgresoNueva = new Date(nuevaFecha + 'T12:00:00');
-        const fechaEgresoActual = new Date(estadia.fecha_egreso_programada);
+        let totalCost = 0;
+        let mainDias = 0;
 
-        // Calculate difference in milliseconds
-        const diffTime = fechaEgresoNueva.getTime() - fechaEgresoActual.getTime();
-        // Convert to days (rounding up to ensure partial days count as 1 if logic dictates, though here diff should be exact days)
-        const diasAdicionales = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        // If Group Mode
+        if (isGroupExtension && groupMembers.length > 0) {
+            groupMembers.forEach(member => {
+                const calc = calculateSingleCost(member, nuevaFecha);
+                totalCost += calc.cost;
+                if (member.id === estadiaId) mainDias = calc.dias; // Capture main stay days
+            });
+            // If main stay hasn't changed days (only others might), ensure we trigger
+            const mainCalc = calculateSingleCost(estadia, nuevaFecha);
+            mainDias = mainCalc.dias;
+        } else {
+            // Single Mode
+            const calc = calculateSingleCost(estadia, nuevaFecha);
+            totalCost = calc.cost;
+            mainDias = calc.dias;
+        }
 
-        if (diasAdicionales <= 0) return { diasAdicionales: 0, costoExtension: 0, costoDiarioTotal: 0, puedeExtender: false };
-
-        // 1. Detectar si es Habitación (Check deeper logic)
-        // La vista puede fallar en cant_camas si la relacion no es estricta, asi que chequeamos el nombre de la parcela asignada
-        const assignedName = (estadia.parcela_asignada || '').toLowerCase();
-        const isHabitacionName = assignedName.includes('cama') || assignedName.includes('habitacion') || assignedName.includes('habitación');
-        const isHabitacion = estadia.cant_camas > 0 || (estadia as any).es_habitacion || isHabitacionName;
-
-        // 2. Costo Persona Diario
-        const costoPersonaDiario = isHabitacion
-            ? (estadia.cant_personas_total || 0) * estadia.p_cama
-            : (estadia.cant_personas_total || 0) * estadia.p_persona;
-
-        // 3. Costo Parcela/Recursos Diario
-        const costoParcelaDiario = isHabitacion
-            ? 0 // Las habitaciones no cobran costo de parcela aparte
-            : (estadia.cant_parcelas_total || 0) * estadia.p_parcela;
-
-        // 3. Extras Diarios
-        const hasVehicle = estadia.tipo_vehiculo && estadia.tipo_vehiculo.toLowerCase() !== 'ninguno';
-        const vehiclePrice = estadia.tipo_vehiculo?.toLowerCase().includes('moto')
-            ? (estadia.p_moto || 0)
-            : (estadia.p_vehiculo || 0);
-
-        const costoExtrasDiario =
-            (estadia.cant_sillas_total || 0) * estadia.p_silla +
-            (estadia.cant_mesas_total || 0) * estadia.p_mesa +
-            (hasVehicle ? vehiclePrice : 0);
-
-
-        const costoDiarioTotal = costoPersonaDiario + costoParcelaDiario + costoExtrasDiario;
-        const costoExtension = diasAdicionales * costoDiarioTotal;
+        // Validation: Ensure at least the main stay is extending forward
+        // (Or allow updating just other group members? For simplicity, we require the date > current main stay date)
+        if (mainDias <= 0) return { diasAdicionales: 0, costoExtension: 0, puedeExtender: false };
 
         return {
-            diasAdicionales,
-            costoExtension,
-            costoDiarioTotal,
+            diasAdicionales: mainDias,
+            costoExtension: totalCost,
             puedeExtender: true
         };
     };
 
     const handleConfirmar = async () => {
         if (!estadia || !nuevaFecha) return;
-
-        // Validar Año Correcto (Evitar bug de año 0025)
         const year = parseInt(nuevaFecha.split('-')[0]);
         if (year < 2024) {
-            toast.error(`Fecha inválida: El año ${year} es incorrecto. Verifique el campo de fecha.`);
+            toast.error(`Fecha inválida: ${year}`);
             return;
         }
 
@@ -138,35 +173,57 @@ export default function ExtensionPage() {
 
         setSaving(true);
         try {
-            // 1. Actualizar Estadía (Fecha Egreso + Acumulado Noches)
-            // IMPORTANTE: Sumar días adicionales al acumulado para que la Vista recalcule el total
-            const { error: updateError } = await supabase
-                .from('estadias')
-                .update({
-                    fecha_egreso_programada: getNoonTimestamp(new Date(nuevaFecha + 'T12:00:00')),
-                    acumulado_noches_persona: estadia.acumulado_noches_persona + calculo.diasAdicionales
-                })
-                .eq('id', estadiaId);
+            const targets = (isGroupExtension && groupMembers.length > 0) ? groupMembers : [estadia];
+            console.log(`Extending ${targets.length} stays...`);
 
-            if (updateError) throw updateError;
+            // 1. Update ALL targets in parallel
+            await Promise.all(targets.map(async (target) => {
+                const targetCalc = calculateSingleCost(target, nuevaFecha);
 
-            // 2. Registrar Pago (si corresponde)
+                // Only update if days > 0 (or allow date change even if same day? Let's assume extension > 0)
+                // Actually user might want to sync dates even if some stay was already longer?
+                // Logic: Set ALL to new Release Date. Recalculate 'acumulado_noches' adding ONLY the diff.
+                if (targetCalc.dias > 0) {
+                    await supabase
+                        .from('estadias')
+                        .update({
+                            fecha_egreso_programada: getNoonTimestamp(new Date(nuevaFecha + 'T12:00:00')),
+                            acumulado_noches_persona: target.acumulado_noches_persona + targetCalc.dias
+                        })
+                        .eq('id', target.id);
+                }
+            }));
+
+
+            // 2. Register Single Unified Payment
+            // Linked to the Responsible's Stay (usually the current one, since we are in it)
             if (metodoPago !== 'cuenta' && montoAbonar > 0) {
                 const { error: pagoError } = await supabase
                     .from('pagos')
                     .insert({
-                        estadia_id: estadiaId,
+                        estadia_id: estadiaId, // Always link to the main responsible stay we are editing
                         monto_abonado: montoAbonar,
                         metodo_pago: metodoPago,
-                        fecha_pago: new Date().toISOString() // TODO: check timezone if needed
+                        fecha_pago: new Date().toISOString()
                     });
 
                 if (pagoError) throw pagoError;
 
-                // 3. Enviar Recibo por WhatsApp
+                // 3. WhatsApp Receipt for Unified Amount
                 if (responsable) {
                     const telefono = responsable.celular.replace(/\D/g, '');
-                    const nuevoSaldo = (estadia.saldo_pendiente || 0) + (calculo.costoExtension || 0) - montoAbonar;
+
+                    // Recalculate Total Debt for Group if needed, or just current stay logic?
+                    // Ideally we show the REAL total debt. 
+                    // Let's approximate: Current Debt of Group + Extension Cost - Payment
+                    let totalDeudaGrupo = 0;
+                    targets.forEach(t => totalDeudaGrupo += t.saldo_pendiente); // This is OLD pending
+
+                    // Add new extension cost
+                    totalDeudaGrupo += calculo.costoExtension;
+
+                    // Subtract Payment
+                    const nuevoSaldo = totalDeudaGrupo - montoAbonar;
 
                     try {
                         await enviarReciboPago(
@@ -178,17 +235,16 @@ export default function ExtensionPage() {
                         );
                         toast.success('Recibo enviado por WhatsApp');
                     } catch (waError) {
-                        console.error('Error enviando WhatsApp:', waError);
-                        toast.error('Pago registrado, pero falló el envío del recibo');
+                        console.error('Error WA:', waError);
                     }
                 }
             }
 
-            toast.success('Estadía extendida correctamente');
+            toast.success(`Estadía${targets.length > 1 ? 's grupales' : ''} extendida correctamente`);
             router.push('/dashboard');
 
         } catch (error) {
-            console.error('Error al extender:', error);
+            console.error('Error extending:', error);
             toast.error('Error al guardar cambios');
         } finally {
             setSaving(false);
@@ -200,7 +256,10 @@ export default function ExtensionPage() {
 
     const calculo = calcularCostoExtension();
     const fechaMinima = new Date(estadia.fecha_egreso_programada).toISOString().split('T')[0];
-    const saldoActual = estadia.saldo_pendiente;
+    const saldoActual = isGroupExtension
+        ? groupMembers.reduce((acc, m) => acc + m.saldo_pendiente, 0)
+        : estadia.saldo_pendiente;
+
     const nuevoSaldoTotal = saldoActual + (calculo?.costoExtension || 0) - (metodoPago !== 'cuenta' ? montoAbonar : 0);
 
     return (
@@ -226,6 +285,23 @@ export default function ExtensionPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
+                                    {/* Group Extension Checkbox */}
+                                    {groupMembers.length > 1 && (
+                                        <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-start gap-3">
+                                            <input
+                                                type="checkbox"
+                                                id="groupCheck"
+                                                checked={isGroupExtension}
+                                                onChange={(e) => setIsGroupExtension(e.target.checked)}
+                                                className="mt-1 w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
+                                            />
+                                            <label htmlFor="groupCheck" className="text-sm cursor-pointer">
+                                                <span className="font-bold text-amber-900 block">Extender a todo el grupo</span>
+                                                <span className="text-amber-700">Aplica a {groupMembers.length} estadías vinculadas</span>
+                                            </label>
+                                        </div>
+                                    )}
+
                                     <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800 border border-blue-100">
                                         <span className="block font-semibold">Egreso Programado Actual:</span>
                                         {new Date(estadia.fecha_egreso_programada).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -242,7 +318,7 @@ export default function ExtensionPage() {
                                         />
                                         {calculo?.puedeExtender && (
                                             <p className="text-sm text-green-600 font-medium mt-2">
-                                                + {calculo.diasAdicionales} días adicionales
+                                                + {calculo.diasAdicionales} días adicionales (Base)
                                             </p>
                                         )}
                                     </div>
@@ -257,8 +333,15 @@ export default function ExtensionPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-2">
+                                        {isGroupExtension && (
+                                            <div className="text-xs font-bold text-amber-700 mb-2 uppercase tracking-wide">
+                                                Aplicando a {groupMembers.length} Personas
+                                            </div>
+                                        )}
                                         <div className="flex justify-between text-sm">
-                                            <span>Días adicionales ({calculo.diasAdicionales}) x Costo Diario</span>
+                                            <span>
+                                                {isGroupExtension ? 'Costo Total Grupo' : `Días adicionales (${calculo.diasAdicionales}) x Costo Diario`}
+                                            </span>
                                             <span>{formatCurrency(calculo.costoExtension)}</span>
                                         </div>
                                         <div className="h-px bg-primary/20 my-2"></div>
