@@ -46,7 +46,7 @@ export default function ReporteTransferenciasPage() {
             // Use T00:00:00 and T23:59:59 to make the range inclusive of the whole day.
             // This ensures payments made late in the day (like those in the screenshot) match.
             const { data: pagosData, error: pagosError } = await supabase
-                .rpc('get_transferencias_report', {
+                .rpc('get_transferencias_report_v2', {
                     fecha_desde: `${fechaDesde}T00:00:00`,
                     fecha_hasta: `${fechaHasta}T23:59:59`
                 });
