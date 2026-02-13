@@ -19,10 +19,10 @@ export const MJE_BIENVENIDA_GENERAL = `Bienvenidos a todos al Maha Camping 2026!
 
 Queriamos compartirles informacion relevante del campamento:
 
-✅Horarios KIOSKO: 
-10hs a 14hs
-17hs a 22hs
-Atendera Pablo Sanchez. 
+✅Horarios KIOSKO:   
+8hs a 9:30hs / 12hs a 13:15hs
+17hs a 18:30hs / 20hs a 21:15hs
+Atendera Juan Ignacio / Pati. 
 ✅COSTO MENU:
 - Desayuno 1000 pesos
 - Almuerzo: 4000 pesos
@@ -33,7 +33,7 @@ Atendera Pablo Sanchez.
  - Desayuno se anota 1 día antes hasta las 22hs
 - Almuerzo hasta las 10:30
 - Cena hasta las 19hs
--Se reserva  en el Kiosko o al Whatsapp de Pablo Sanhez
+-Se reserva  en el Kiosko o al Whatsapp de Juan Ignacio / Pati
 Se abona preferentemente en  efectivo.  
 
 ✅El COMEDOR DEL KILLA esta habilitado para ir a comer con aire acondicionado. Solo para  los que encargen menus en el Killa. 
