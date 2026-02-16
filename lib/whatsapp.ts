@@ -35,9 +35,12 @@ export const mensajePago = (
     nombre: string,
     montoPagado: number,
     saldoPendiente: number,
-    metodoPago: string
+    metodoPago: string,
+    fechaSalida: string // New param
 ): string => {
     const estado = saldoPendiente === 0 ? '✅ PAGADO EN SU TOTALIDAD' : '⚠️ SALDO PENDIENTE';
+    // Format date nicely
+    const fechaSalidaFormato = new Date(fechaSalida).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
 
     return `🧾 RECIBO DE PAGO - Campamento Vrindavan
 
@@ -48,12 +51,28 @@ Confirmamos la recepción de tu pago:
 💵 Monto abonado: $${montoPagado.toFixed(2)}
 💳 Método de pago: ${metodoPago}
 📊 Saldo pendiente: $${saldoPendiente.toFixed(2)}
+📅 Fecha de Salida: ${fechaSalidaFormato}
 
 ${estado}
 
 ${saldoPendiente > 0 ? '⚠️ Recuerda que puedes saldar el resto en recepción.' : '¡Gracias por tu pago!'}
 
 🙏 Hare Krishna`;
+};
+
+export const enviarReciboPago = async (
+    telefono: string,
+    nombre: string,
+    montoPagado: number,
+    saldoPendiente: number,
+    metodoPago: string,
+    fechaSalida: string // New param
+): Promise<boolean> => {
+    return await enviarWhatsApp({
+        telefono,
+        mensaje: mensajePago(nombre, montoPagado, saldoPendiente, metodoPago, fechaSalida),
+        tipo: 'pago',
+    });
 };
 
 export const mensajeDespedida = (nombre: string): string => {
@@ -85,19 +104,7 @@ export const enviarBienvenida = async (
     });
 };
 
-export const enviarReciboPago = async (
-    telefono: string,
-    nombre: string,
-    montoPagado: number,
-    saldoPendiente: number,
-    metodoPago: string
-): Promise<boolean> => {
-    return await enviarWhatsApp({
-        telefono,
-        mensaje: mensajePago(nombre, montoPagado, saldoPendiente, metodoPago),
-        tipo: 'pago',
-    });
-};
+
 
 export const enviarDespedida = async (
     telefono: string,

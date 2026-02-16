@@ -231,7 +231,8 @@ export default function ExtensionPage() {
                             responsable.nombre_completo,
                             montoAbonar,
                             nuevoSaldo,
-                            metodoPago
+                            metodoPago,
+                            nuevaFecha // Pass new date
                         );
                         toast.success('Recibo enviado por WhatsApp');
                     } catch (waError) {

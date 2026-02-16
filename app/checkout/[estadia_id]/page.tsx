@@ -258,7 +258,8 @@ export default function CheckoutPage() {
                             responsable.nombre_completo,
                             montoPago,
                             calc.nuevoSaldo - montoPago,
-                            metodoPago
+                            metodoPago,
+                            fechaSalidaReal // Pass actual checkout date
                         );
                     }
 

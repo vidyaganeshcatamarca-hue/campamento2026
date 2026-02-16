@@ -161,7 +161,8 @@ export default function SaldoPage() {
                     responsable.nombre_completo,
                     montoPago,
                     nuevoSaldo,
-                    metodoPago
+                    metodoPago,
+                    vistaEstadia.fecha_egreso_programada // Pass fechaSalida
                 );
             }
 
