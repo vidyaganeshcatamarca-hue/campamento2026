@@ -178,9 +178,29 @@ export default function DashboardPage() {
                 .select('*', { count: 'exact', head: true })
                 .gte('fecha_visita', today.toISOString());
 
+            // FIX: Fetch Global Debt (Matches Deudores Page)
+            // Separate query to get the TRUE total debt, not just from active stays.
+            let globalDebt = 0;
+            const { data: globalDebtors } = await supabase
+                .from('vista_estadias_con_totales')
+                .select('celular_responsable, saldo_pendiente_grupal')
+                .gt('saldo_pendiente_grupal', 10)
+                .neq('estado_estadia', 'cancelada');
+
+            if (globalDebtors) {
+                const uniqueDebtors = new Set<string>();
+                globalDebtors.forEach(d => {
+                    const tel = d.celular_responsable || 'unknown';
+                    if (!uniqueDebtors.has(tel)) {
+                        uniqueDebtors.add(tel);
+                        globalDebt += (d.saldo_pendiente_grupal || 0);
+                    }
+                });
+            }
+
             setStats({
                 totalPersonas: acampantes?.length || 0,
-                totalDeuda,
+                totalDeuda: globalDebt, // Use GLOBAL debt
                 personasRiesgo,
                 ocupacionParcelas: ocupacion,
                 visitantesHoy: visitorsCount || 0
