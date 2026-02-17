@@ -35,14 +35,15 @@ export default function DeudoresPage() {
     const fetchDeudores = async () => {
         setLoading(true);
         try {
-            // 1. Obtener candidatos (gente con deuda en alguna estadía)
+            // 1. Obtener candidatos (gente cuya deuda GRUPAL es > 10)
             let query = supabase
                 .from('vista_estadias_con_totales')
                 .select('*')
                 .eq('ingreso_confirmado', true)
                 .neq('estado_estadia', 'cancelada')
                 .neq('estado_estadia', 'reservada')
-                .gt('saldo_pendiente', 10);
+                // FIX: Usar la nueva columna de deuda grupal para el filtro
+                .gt('saldo_pendiente_grupal', 10);
 
             if (filtro === 'activos') query = query.eq('estado_estadia', 'activa');
             else if (filtro === 'finalizados') query = query.eq('estado_estadia', 'finalizada');
@@ -56,67 +57,57 @@ export default function DeudoresPage() {
                 return;
             }
 
-            // 2. Obtener TODAS las estadías relacionadas a estos responsables para neto grupal
-            const telefonos = [...new Set(candidatos.map(c => c.celular_responsable))];
+            // 2. Construir lista final
+            // Ya vienen filtrados correctamente por la vista.
+            // Solo necesitamos mapear y obtener el responsable (que a veces es el mismo item o hay que buscarlo si la estadía listada no es la del responsable)
+            // Estrategia: La vista devuelve estadías. Si una estadía tiene deuda grupal, la mostramos.
+            // Pero queremos mostrar al "Responsable" y el monto total.
 
-            const { data: gruposCompleto, error: grupoError } = await supabase
-                .from('vista_estadias_con_totales')
-                .select('id, celular_responsable, saldo_pendiente, estadia_id:id') // Seleccionamos lo necesario
-                .in('celular_responsable', telefonos)
-                .neq('estado_estadia', 'cancelada');
+            // Agrupar por responsable para mostrar una sola tarjeta por grupo?
+            // Actualmente el código original mostraba una tarjeta por item filtrado si el grupo debía.
+            // Si el grupo debe 50k, y tiene 3 estadías, ¿mostramos 3 tarjetas de 50k? Sería confuso.
+            // Mejor mostrar UNA tarjeta por celular_responsable.
 
-            if (grupoError) throw grupoError;
-
-            // 3. Calcular balances netos por responsable
-            const balancePorResponsable: Record<string, number> = {};
-            gruposCompleto?.forEach(g => {
-                const tel = g.celular_responsable || 'unknown';
-                balancePorResponsable[tel] = (balancePorResponsable[tel] || 0) + (g.saldo_pendiente || 0);
-            });
-
-            // 4. Filtrar y construir lista final
-            const deudoresInfo: DeudorInfo[] = [];
+            const uniques: Record<string, DeudorInfo> = {};
             let totalGeneral = 0;
-            const procesados = new Set<string>(); // Para evitar duplicados si un responsable tiene 2 estadías con deuda
 
             for (const item of candidatos) {
-                const tel = item.celular_responsable || 'unknown';
-                const saldoNeto = balancePorResponsable[tel] || 0;
-
-                // Solo si el SALDO NETO del grupo es deuda (> 100 por margen)
-                // Y no hemos procesado a este responsable ya (se muestra una vez por grupo o por estadía?)
-                // Si mostramos por estadía, mostramos solo si el grupo debe.
-                // Pero si el grupo debe, ¿qué estadía mostramos? ¿La que tiene deuda?
-
-                if (saldoNeto > 100) {
-                    // Obtener datos del responsable (cachear si es posible, pero son pocos)
+                const tel = item.celular_responsable;
+                if (!uniques[tel]) {
+                    // Fetch real contact data just in case
                     const { data: responsable } = await supabase
                         .from('acampantes')
                         .select('*')
-                        .eq('estadia_id', item.id)
+                        .eq('estadia_id', item.id) // Usamos esta estadía para sacar datos del contacto
                         .eq('es_responsable_pago', true)
                         .single();
 
-                    if (responsable) {
-                        // Modificar el objeto estadía para reflejar el saldo neto? 
-                        // Ojo: Si modificamos saldo_pendiente visualmente, puede confundir con el real.
-                        // Mejor mostrar la estadía deudora, pero saber que es deuda legítima.
+                    // Fallback to item data if responsable fetch fails or isn't found (using item as simple object)
+                    const acampanteFallback: Acampante = {
+                        celular: item.celular_responsable,
+                        nombre_completo: `Grupo ${item.celular_responsable}`,
+                        estadia_id: item.id
+                    };
 
-                        deudoresInfo.push({
-                            estadia: item,
-                            responsable: responsable,
-                        });
-                        totalGeneral += (item.saldo_pendiente || 0); // Sumamos lo que debe ESTA estadía al total general listado
-                    }
+                    uniques[tel] = {
+                        estadia: item,
+                        responsable: responsable || acampanteFallback
+                    };
+
+                    // El total deuda es la suma de los saldos grupales únicos
+                    // OJO: item.saldo_pendiente_grupal es el total del grupo.
+                    // Si sumamos los de todos los grupos únicos, tenemos el total general real.
+                    totalGeneral += (item.saldo_pendiente_grupal || 0);
                 }
             }
 
-            // Ordenar por deuda
-            deudoresInfo.sort((a, b) => b.estadia.saldo_pendiente - a.estadia.saldo_pendiente);
+            const deudoresInfo = Object.values(uniques);
+
+            // Ordenar por deuda grupal desc
+            deudoresInfo.sort((a, b) => (b.estadia.saldo_pendiente_grupal || 0) - (a.estadia.saldo_pendiente_grupal || 0));
 
             setDeudores(deudoresInfo);
             setTotalAdeudado(totalGeneral);
-
         } catch (error) {
             console.error('Error:', error);
         } finally {

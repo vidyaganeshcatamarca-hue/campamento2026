@@ -368,7 +368,7 @@ export default function DashboardPage() {
                         {viewMode === 'grid' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {personasFiltradas.map((item, idx) => {
-                                    const hasDebt = item.estadia.saldo_pendiente > 0;
+                                    const hasDebt = (item.estadia.saldo_pendiente_grupal || 0) > 10 || (item.estadia.saldo_pendiente || 0) > 10;
                                     const isRisk = item.persona.es_persona_riesgo;
                                     const isResponsible = item.persona.es_responsable_pago;
                                     const isOverdue = overdueStays.some(o => o.id === item.estadia.id);
@@ -487,7 +487,7 @@ export default function DashboardPage() {
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div className="grid grid-cols-1 divide-y divide-gray-100">
                                     {personasFiltradas.map((item) => {
-                                        const hasDebt = item.estadia.saldo_pendiente > 0;
+                                        const hasDebt = (item.estadia.saldo_pendiente_grupal || 0) > 10 || (item.estadia.saldo_pendiente || 0) > 10;
                                         const isRisk = item.persona.es_persona_riesgo;
                                         const isResponsible = item.persona.es_responsable_pago;
                                         const isOverdue = overdueStays.some(o => o.id === item.estadia.id);

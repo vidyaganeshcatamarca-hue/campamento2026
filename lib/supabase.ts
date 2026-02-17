@@ -113,6 +113,7 @@ export interface VistaEstadiaConTotales {
     monto_total_final: number; // Monto total calculado con descuento
 
     saldo_pendiente: number; // Monto total - pagos realizados
+    saldo_pendiente_grupal?: number; // NUEVO: Saldo neto de todo el grupo (celular_responsable)
     parcela_asignada?: string | null; // Nombre de parcela/s asignada/s
     es_habitacion?: boolean; // NUEVO: Flag para distinguir precio cama
 }
