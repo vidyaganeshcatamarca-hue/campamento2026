@@ -130,19 +130,22 @@ export default function DashboardPage() {
             setItems(combinedItems);
 
             // 4. Calculate Stats
-            // FIX: Sumar solo DEUDAS REALES (Netas por Grupo)
-            const balancePorResponsable: Record<string, number> = {};
+            // 4. Calculate Stats
+            // FIX: Sumar deuda grupal real (incluyendo deuda histórica de los grupos activos)
+            const uniqueResponsibles = new Set<string>();
+            let totalDeuda = 0;
 
-            // Agrupar saldos por responsable
             estadias?.forEach(e => {
                 const tel = e.celular_responsable || 'unknown';
-                balancePorResponsable[tel] = (balancePorResponsable[tel] || 0) + (e.saldo_pendiente || 0);
+                if (!uniqueResponsibles.has(tel)) {
+                    uniqueResponsibles.add(tel);
+                    // Usar la columna pre-calculada por la vista que incluye TODA la deuda del grupo (pasada y presente)
+                    const groupDebt = e.saldo_pendiente_grupal || 0;
+                    if (groupDebt > 10) {
+                        totalDeuda += groupDebt;
+                    }
+                }
             });
-
-            // Sumar solo los balances netos positivos
-            const totalDeuda = Object.values(balancePorResponsable).reduce((acc, netBalance) => {
-                return acc + (netBalance > 10 ? netBalance : 0); // Margen de $10 por redondeo
-            }, 0);
 
             const personasRiesgo = acampantes?.filter(p => p.es_persona_riesgo).length || 0;
             const ocupacion = estadias?.filter(e => e.parcela_asignada).length || 0;
