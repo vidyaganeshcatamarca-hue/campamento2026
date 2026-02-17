@@ -26,6 +26,7 @@ export default function SaldoPage() {
     // Estados para lógica grupal
     const [esGrupo, setEsGrupo] = useState(false);
     const [integrantesGrupo, setIntegrantesGrupo] = useState<VistaEstadiaConTotales[]>([]);
+    const [verIndividual, setVerIndividual] = useState(false); // Toggle para ver solo ésta estadía
 
     const [montoPago, setMontoPago] = useState(0);
     const [metodoPago, setMetodoPago] = useState('Efectivo');
@@ -34,7 +35,7 @@ export default function SaldoPage() {
 
     const [nuevoDescuento, setNuevoDescuento] = useState(0);
 
-    // Tipos para el RPC
+    // ... (Tipos para RPC omitidos por brevedad, no cambian) ...
     type DetalleItem = {
         fecha: string;
         concepto: string;
@@ -120,10 +121,17 @@ export default function SaldoPage() {
         if (montoPago <= 0) return;
         if (!vistaEstadia) return;
 
-        // Recalcular saldo pendiente real antes de validar
-        const totalGrupo = esGrupo ? integrantesGrupo.reduce((sum, g) => sum + g.monto_total_final, 0) : vistaEstadia.monto_total_final;
-        const totalPagadoGrupo = pagos.reduce((sum, p) => sum + p.monto_abonado, 0);
-        const deudaReal = totalGrupo - totalPagadoGrupo;
+        // Recalcular saldo pendiente real antes de validar (Depende del modo)
+        const totalObjetivo = (esGrupo && !verIndividual)
+            ? integrantesGrupo.reduce((sum, g) => sum + g.monto_total_final, 0)
+            : vistaEstadia.monto_total_final;
+
+        const pagosConsiderados = (esGrupo && !verIndividual)
+            ? pagos
+            : pagos.filter(p => p.estadia_id === estadiaId);
+
+        const totalPagadoObjetivo = pagosConsiderados.reduce((sum, p) => sum + p.monto_abonado, 0);
+        const deudaReal = totalObjetivo - totalPagadoObjetivo;
 
         if (montoPago > deudaReal + 1000) { // Pequeño margen por redondeo
             alert("El monto supera la deuda pendiente");
@@ -198,11 +206,15 @@ export default function SaldoPage() {
     // --- CÁLCULOS FINALES PARA RENDERIZADO ---
 
     // 1. Calcular totales (Individual o Grupal)
-    const totalFinal = esGrupo
+    const totalFinal = (esGrupo && !verIndividual)
         ? integrantesGrupo.reduce((sum, g) => sum + g.monto_total_final, 0)
         : vistaEstadia.monto_total_final;
 
-    const totalPagado = pagos.reduce((sum, p) => sum + p.monto_abonado, 0);
+    const pagosVisualizados = (esGrupo && !verIndividual)
+        ? pagos
+        : pagos.filter(p => p.estadia_id === estadiaId);
+
+    const totalPagado = pagosVisualizados.reduce((sum, p) => sum + p.monto_abonado, 0);
     const saldoPendiente = totalFinal - totalPagado;
 
     // A efectos de desglose visual individual (se mantiene para mostrar detalle de ESTA estadía)
@@ -250,19 +262,33 @@ export default function SaldoPage() {
                     </Button>
                     <div className="flex-1">
                         <h1 className="text-2xl font-bold text-primary">
-                            Estado de Cuenta {esGrupo && '(Grupal)'}
+                            Estado de Cuenta {esGrupo && !verIndividual && '(Grupal)'} {esGrupo && verIndividual && '(Individual)'}
                         </h1>
                         <p className="text-muted text-sm mt-1">
                             {responsable.nombre_completo} • {vistaEstadia.celular_responsable}
                         </p>
                     </div>
-                    <Badge variant={saldoPendiente > 0 ? 'danger' : 'success'} className="text-lg px-4 py-2">
-                        {saldoPendiente > 0 ? `ADEUDA ${formatCurrency(saldoPendiente)}` : 'AL DÍA'}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-2">
+                        <Badge variant={saldoPendiente > 0 ? 'danger' : 'success'} className="text-lg px-4 py-2">
+                            {saldoPendiente > 0 ? `ADEUDA ${formatCurrency(saldoPendiente)}` : 'AL DÍA'}
+                        </Badge>
+
+                        {esGrupo && (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer select-none bg-white border border-gray-200 rounded px-2 py-1 shadow-sm hover:bg-gray-50">
+                                <input
+                                    type="checkbox"
+                                    checked={verIndividual}
+                                    onChange={(e) => setVerIndividual(e.target.checked)}
+                                    className="rounded text-primary focus:ring-primary w-4 h-4"
+                                />
+                                <span className={verIndividual ? "font-bold text-primary" : "text-gray-600"}>Ver Individual</span>
+                            </label>
+                        )}
+                    </div>
                 </div>
 
-                {/* Resumen Grupal (Solo si es responsable de grupo) */}
-                {esGrupo && (
+                {/* Resumen Grupal (Solo si es responsable de grupo Y modo grupal activo) */}
+                {esGrupo && !verIndividual && (
                     <Card className="border-amber-200 bg-amber-50">
                         <CardHeader>
                             <CardTitle className="text-amber-900 flex items-center gap-2">
